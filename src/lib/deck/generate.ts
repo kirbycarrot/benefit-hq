@@ -11,6 +11,13 @@ import {
 } from "@/lib/charts/svgRender";
 import { renderWorkforceMapSvg } from "@/lib/geography/mapRender";
 import { generateCaption } from "@/lib/deck/captions";
+import {
+  buildDeckRecommendations,
+  insightTitle,
+  sectionNarrative,
+  takeawayForResult,
+  type DeckRecommendation,
+} from "@/lib/deck/narrative";
 import { formatDate } from "@/lib/date";
 import type { ChartResult } from "@/lib/charts/types";
 import {
@@ -31,6 +38,7 @@ import {
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
+const CONTENT_MASTER = "BENEFIT_HQ_CONTENT";
 const PALETTE_EXTRA = ["6366F1", "F59E0B", "EF4444", "10B981"];
 
 // Related charts that read better combined on one slide than as three near-empty ones.
@@ -102,32 +110,329 @@ function percentageChangeLabel(value: number | null): string {
   return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}%`;
 }
 
-function addHeader(slide: PptxGenJS.Slide, title: string, primary: string, secondary: string) {
-  slide.addShape("rect", { x: 0, y: 0, w: SLIDE_W, h: 0.9, fill: { color: primary } });
-  slide.addShape("rect", { x: 0, y: 0.9, w: SLIDE_W, h: 0.06, fill: { color: secondary } });
+function addContentSlide(pres: PptxGenJS): PptxGenJS.Slide {
+  return pres.addSlide({ masterName: CONTENT_MASTER });
+}
+
+function addHeader(
+  slide: PptxGenJS.Slide,
+  title: string,
+  primary: string,
+  secondary: string,
+  topic?: string
+) {
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  slide.addShape("rect", {
+    x: 0,
+    y: 0,
+    w: 0.13,
+    h: 0.96,
+    fill: { color: primaryColor },
+    line: { color: primaryColor, transparency: 100 },
+  });
+  slide.addText((topic ?? "Benefits renewal analysis").toUpperCase(), {
+    x: 0.5,
+    y: 0.14,
+    w: SLIDE_W - 1,
+    h: 0.15,
+    fontSize: 8,
+    bold: true,
+    color: secondaryColor,
+    charSpacing: 1.1,
+    margin: 0,
+    fit: "shrink",
+  });
   slide.addText(title, {
     x: 0.5,
-    y: 0,
+    y: 0.34,
     w: SLIDE_W - 1,
-    h: 0.9,
-    fontSize: 24,
+    h: 0.43,
+    fontSize: 27,
     bold: true,
-    color: "FFFFFF",
+    color: primaryColor,
     valign: "middle",
+    margin: 0,
+    fit: "shrink",
+    breakLine: false,
+  });
+  slide.addShape("line", {
+    x: 0.5,
+    y: 0.94,
+    w: SLIDE_W - 1,
+    h: 0,
+    line: { color: "DCE2DF", pt: 0.8 },
   });
 }
 
-function addCaption(slide: PptxGenJS.Slide, caption: string, y: number) {
-  if (!caption) return;
-  slide.addText(caption, {
-    x: 0.6,
+function addTakeawayPanel(
+  slide: PptxGenJS.Slide,
+  takeaway: string,
+  primary: string,
+  secondary: string,
+  y = 6.14,
+  h = 0.74
+) {
+  if (!takeaway) return;
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  slide.addShape("roundRect", {
+    x: 0.55,
     y,
-    w: SLIDE_W - 1.2,
-    h: 0.4,
-    fontSize: 13,
-    italic: true,
-    color: "4B5563",
-    align: "center",
+    w: SLIDE_W - 1.1,
+    h,
+    fill: { color: "F5F8F7" },
+    line: { color: "DCE2DF", pt: 0.6 },
+    rectRadius: 0.04,
+  });
+  slide.addShape("rect", {
+    x: 0.55,
+    y,
+    w: 0.09,
+    h,
+    fill: { color: secondaryColor },
+    line: { color: secondaryColor, transparency: 100 },
+  });
+  slide.addText("KEY TAKEAWAY", {
+    x: 0.82,
+    y: y + 0.14,
+    w: 1.35,
+    h: 0.16,
+    fontSize: 8,
+    bold: true,
+    color: primaryColor,
+    charSpacing: 0.8,
+    margin: 0,
+  });
+  slide.addText(takeaway, {
+    x: 2.05,
+    y: y + 0.11,
+    w: SLIDE_W - 2.85,
+    h: h - 0.2,
+    fontSize: 12.5,
+    color: "374151",
+    margin: 0,
+    valign: "middle",
+    fit: "shrink",
+  });
+}
+
+function defineContentMaster(
+  pres: PptxGenJS,
+  clientName: string,
+  planYearLabel: string,
+  effectiveDate: Date
+) {
+  pres.defineSlideMaster({
+    title: CONTENT_MASTER,
+    background: { color: "FFFFFF" },
+    objects: [
+      {
+        line: {
+          x: 0.5,
+          y: 7.19,
+          w: SLIDE_W - 1,
+          h: 0,
+          line: { color: "DCE2DF", pt: 0.6 },
+        },
+      },
+      {
+        text: {
+          text: `${clientName}  ·  ${planYearLabel}`,
+          options: {
+            x: 0.52,
+            y: 7.27,
+            w: 5.4,
+            h: 0.12,
+            fontSize: 7.5,
+            color: "6B7280",
+            margin: 0,
+            fit: "shrink",
+          },
+        },
+      },
+      {
+        text: {
+          text: `EFFECTIVE ${formatDate(effectiveDate).toUpperCase()}`,
+          options: {
+            x: 8.2,
+            y: 7.27,
+            w: 4.2,
+            h: 0.12,
+            fontSize: 7.5,
+            color: "6B7280",
+            align: "right",
+            margin: 0,
+          },
+        },
+      },
+    ],
+    slideNumber: {
+      x: 12.52,
+      y: 7.25,
+      w: 0.3,
+      h: 0.14,
+      fontSize: 7.5,
+      bold: true,
+      color: "4B5563",
+      align: "right",
+      margin: 0,
+    },
+  });
+}
+
+function addSectionDividerSlide(
+  pres: PptxGenJS,
+  category: string,
+  sectionNumber: number,
+  primary: string,
+  secondary: string,
+  clientName: string,
+  planYearLabel: string
+) {
+  const slide = pres.addSlide();
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  const copy = sectionNarrative(category);
+  slide.background = { color: primaryColor };
+  slide.addShape("rect", {
+    x: 0,
+    y: 0,
+    w: 0.16,
+    h: SLIDE_H,
+    fill: { color: secondaryColor },
+    line: { color: secondaryColor, transparency: 100 },
+  });
+  slide.addText(String(sectionNumber).padStart(2, "0"), {
+    x: 0.7,
+    y: 1.2,
+    w: 2.2,
+    h: 1.1,
+    fontSize: 62,
+    bold: true,
+    color: secondaryColor,
+    margin: 0,
+  });
+  slide.addText(copy.title, {
+    x: 0.72,
+    y: 2.65,
+    w: 10.9,
+    h: 0.72,
+    fontSize: 38,
+    bold: true,
+    color: "FFFFFF",
+    margin: 0,
+    fit: "shrink",
+  });
+  slide.addText(copy.subtitle, {
+    x: 0.74,
+    y: 3.55,
+    w: 9.8,
+    h: 0.54,
+    fontSize: 19,
+    color: "E7ECE9",
+    margin: 0,
+    fit: "shrink",
+  });
+  slide.addShape("line", {
+    x: 0.74,
+    y: 6.82,
+    w: SLIDE_W - 1.48,
+    h: 0,
+    line: { color: "FFFFFF", transparency: 70, pt: 0.7 },
+  });
+  slide.addText(`${clientName}  ·  ${planYearLabel}`, {
+    x: 0.74,
+    y: 6.98,
+    w: 7,
+    h: 0.16,
+    fontSize: 8,
+    color: "FFFFFF",
+    transparency: 20,
+    margin: 0,
+  });
+}
+
+function addRecommendationsSlide(
+  pres: PptxGenJS,
+  recommendations: DeckRecommendation[],
+  primary: string,
+  secondary: string
+) {
+  const slide = addContentSlide(pres);
+  const countLabel = ["Zero", "One", "Two", "Three", "Four", "Five"][recommendations.length];
+  addHeader(
+    slide,
+    `${countLabel} ${recommendations.length === 1 ? "priority" : "priorities"} can strengthen the next renewal cycle`,
+    primary,
+    secondary,
+    "Prioritized actions"
+  );
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  const startY = 1.25;
+  const rowH = Math.min(1.03, 5.45 / recommendations.length);
+
+  recommendations.forEach((recommendation, index) => {
+    const y = startY + index * rowH;
+    const priorityColor =
+      recommendation.priority === "Immediate attention"
+        ? "B45309"
+        : recommendation.priority === "Renewal consideration"
+          ? primaryColor
+          : secondaryColor;
+    slide.addText(String(index + 1).padStart(2, "0"), {
+      x: 0.62,
+      y: y + 0.08,
+      w: 0.55,
+      h: 0.35,
+      fontSize: 18,
+      bold: true,
+      color: priorityColor,
+      margin: 0,
+    });
+    slide.addText(recommendation.priority.toUpperCase(), {
+      x: 1.42,
+      y: y + 0.04,
+      w: 2.15,
+      h: 0.15,
+      fontSize: 7.5,
+      bold: true,
+      color: priorityColor,
+      charSpacing: 0.7,
+      margin: 0,
+    });
+    slide.addText(recommendation.title, {
+      x: 1.42,
+      y: y + 0.26,
+      w: 5.2,
+      h: 0.35,
+      fontSize: 15,
+      bold: true,
+      color: "273036",
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(recommendation.detail, {
+      x: 6.95,
+      y: y + 0.21,
+      w: 5.75,
+      h: 0.42,
+      fontSize: 11.5,
+      color: "4B5563",
+      margin: 0,
+      valign: "middle",
+      fit: "shrink",
+    });
+    if (index < recommendations.length - 1) {
+      slide.addShape("line", {
+        x: 1.42,
+        y: y + rowH - 0.08,
+        w: 11.28,
+        h: 0,
+        line: { color: "E4E8E6", pt: 0.7 },
+      });
+    }
   });
 }
 
@@ -137,10 +442,10 @@ export function addExecutiveSummarySlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
+  const slide = addContentSlide(pres);
   const primaryColor = stripHash(primary);
   const secondaryColor = stripHash(secondary);
-  addHeader(slide, result.title, primary, secondary);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const margin = 0.48;
   const gap = 0.16;
@@ -269,12 +574,11 @@ export function addBenefitsParticipationSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
+  const slide = addContentSlide(pres);
   const primaryColor = stripHash(primary);
-  const secondaryColor = stripHash(secondary);
   const waivedColor = "D97706";
   const unreportedColor = "C9CDD1";
-  addHeader(slide, result.title, primary, secondary);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   slide.addText("Eligible employees flow to enrolled, waived, or not recorded for each benefit.", {
     x: 0.55,
@@ -410,24 +714,7 @@ export function addBenefitsParticipationSlide(
     }
   });
 
-  slide.addShape("rect", {
-    x: 0.55,
-    y: 6.77,
-    w: 0.12,
-    h: 0.28,
-    fill: { color: secondaryColor },
-    line: { color: secondaryColor, transparency: 100 },
-  });
-  slide.addText(result.note, {
-    x: 0.78,
-    y: 6.74,
-    w: SLIDE_W - 1.35,
-    h: 0.34,
-    fontSize: 9.5,
-    color: "6B7280",
-    margin: 0,
-    fit: "shrink",
-  });
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.42, 0.56);
 }
 
 export function addContributionStrategySlides(
@@ -438,8 +725,8 @@ export function addContributionStrategySlides(
 ) {
   const primaryColor = stripHash(primary);
   const secondaryColor = stripHash(secondary);
-  const firstPageRows = result.rows.slice(0, 8);
-  const remainingRows = result.rows.slice(8);
+  const firstPageRows = result.rows.slice(0, 7);
+  const remainingRows = result.rows.slice(7);
   const pages = [
     { rows: firstPageRows, first: true },
     ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
@@ -497,12 +784,13 @@ export function addContributionStrategySlides(
   };
 
   pages.forEach((page, pageIndex) => {
-    const slide = pres.addSlide();
+    const slide = addContentSlide(pres);
     addHeader(
       slide,
-      page.first ? result.title : `${result.title} (continued ${pageIndex + 1})`,
+      page.first ? insightTitle(result) : `${result.title} — continued ${pageIndex + 1}`,
       primary,
-      secondary
+      secondary,
+      result.title
     );
 
     let tableY = 1.28;
@@ -604,15 +892,17 @@ export function addContributionStrategySlides(
     }
 
     if (page.first) {
+      addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.14, 0.62);
       slide.addText(result.note, {
         x: 0.55,
-        y: 6.93,
+        y: 6.88,
         w: SLIDE_W - 1.1,
-        h: 0.3,
-        fontSize: 8,
+        h: 0.18,
+        fontSize: 6.5,
         color: "6B7280",
         margin: 0,
         fit: "shrink",
+        align: "center",
       });
     }
   });
@@ -624,10 +914,10 @@ export function addWorkforceRiskSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
+  const slide = addContentSlide(pres);
   const primaryColor = stripHash(primary);
   const secondaryColor = stripHash(secondary);
-  addHeader(slide, result.title, primary, secondary);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const margin = 0.48;
   const gap = 0.16;
@@ -915,11 +1205,11 @@ export function addDataQualitySlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
+  const slide = addContentSlide(pres);
   const primaryColor = stripHash(primary);
   const secondaryColor = stripHash(secondary);
   const warningColor = "D97706";
-  addHeader(slide, result.title, primary, secondary);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const validZipPercentage = result.totalEmployees
     ? (result.validZipRecords / result.totalEmployees) * 100
@@ -1222,8 +1512,8 @@ export function addRenewalComparisonSlides(
 ) {
   const primaryColor = stripHash(primary);
   const warningColor = "D97706";
-  const firstPageRows = result.rows.slice(0, 7);
-  const remainingRows = result.rows.slice(7);
+  const firstPageRows = result.rows.slice(0, 6);
+  const remainingRows = result.rows.slice(6);
   const pages = [
     { rows: firstPageRows, first: true },
     ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
@@ -1332,12 +1622,13 @@ export function addRenewalComparisonSlides(
   };
 
   pages.forEach((page, pageIndex) => {
-    const slide = pres.addSlide();
+    const slide = addContentSlide(pres);
     addHeader(
       slide,
-      page.first ? result.title : `${result.title} (continued ${pageIndex + 1})`,
+      page.first ? insightTitle(result) : `${result.title} — continued ${pageIndex + 1}`,
       primary,
-      secondary
+      secondary,
+      result.title
     );
 
     let tableY = 1.25;
@@ -1455,12 +1746,13 @@ export function addRenewalComparisonSlides(
     }
 
     if (page.first) {
+      addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.12, 0.61);
       slide.addText(result.note, {
         x: 0.55,
-        y: 6.9,
+        y: 6.87,
         w: SLIDE_W - 1.1,
-        h: 0.28,
-        fontSize: 7.5,
+        h: 0.18,
+        fontSize: 6.5,
         color: "6B7280",
         margin: 0,
         fit: "shrink",
@@ -1476,8 +1768,8 @@ function addStatsSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const count = result.stats.length;
   const gap = 0.4;
@@ -1524,8 +1816,8 @@ function addBarSlide(
   secondary: string,
   options: { valueFormat?: "number" | "currency" } = {}
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const svg = renderBarChartSvg(
     result,
@@ -1535,7 +1827,7 @@ function addBarSlide(
     options
   );
   const png = svgToPng(svg);
-  const imgH = SLIDE_H - 2.3;
+  const imgH = 4.55;
   slide.addImage({
     data: `image/png;base64,${png.toString("base64")}`,
     x: 0.6,
@@ -1544,7 +1836,7 @@ function addBarSlide(
     h: imgH,
   });
 
-  addCaption(slide, generateCaption(result), 1.2 + imgH + 0.1);
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.05, 0.76);
 }
 
 function addStackedBarSlide(
@@ -1554,8 +1846,8 @@ function addStackedBarSlide(
   secondary: string,
   options: { normalize?: boolean; valueFormat?: "number" | "currency" } = {}
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const svg = renderStackedBarChartSvg(
     result,
@@ -1565,7 +1857,7 @@ function addStackedBarSlide(
     options
   );
   const png = svgToPng(svg);
-  const imgH = SLIDE_H - 2.3;
+  const imgH = 4.55;
   slide.addImage({
     data: `image/png;base64,${png.toString("base64")}`,
     x: 0.6,
@@ -1574,7 +1866,7 @@ function addStackedBarSlide(
     h: imgH,
   });
 
-  addCaption(slide, generateCaption(result), 1.2 + imgH + 0.1);
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.05, 0.76);
 }
 
 function addPieSlide(
@@ -1583,12 +1875,12 @@ function addPieSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const svg = renderPieChartSvg(result, paletteFor(primary, secondary), 700, 620);
   const png = svgToPng(svg);
-  const imgSize = SLIDE_H - 2.3;
+  const imgSize = 4.55;
   slide.addImage({
     data: `image/png;base64,${png.toString("base64")}`,
     x: SLIDE_W / 2 - imgSize / 2,
@@ -1597,7 +1889,7 @@ function addPieSlide(
     h: imgSize,
   });
 
-  addCaption(slide, generateCaption(result), 1.2 + imgSize + 0.1);
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.05, 0.76);
 }
 
 function addTableSlide(
@@ -1606,15 +1898,15 @@ function addTableSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const headerRow: PptxGenJS.TableRow = result.columns.map((c) => ({
     text: c,
     options: { fill: { color: stripHash(primary) }, color: "FFFFFF", bold: true, fontSize: 12 },
   }));
 
-  const bodyRows: PptxGenJS.TableRow[] = result.rows.slice(0, 14).map((row, i) =>
+  const bodyRows: PptxGenJS.TableRow[] = result.rows.slice(0, 11).map((row, i) =>
     row.map((cell) => ({
       text: String(cell),
       options: {
@@ -1634,7 +1926,7 @@ function addTableSlide(
     autoPage: false,
   });
 
-  addCaption(slide, generateCaption(result), SLIDE_H - 0.55);
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.05, 0.76);
 }
 
 function addMapSlide(
@@ -1643,12 +1935,12 @@ function addMapSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, result.title, primary, secondary);
+  const slide = addContentSlide(pres);
+  addHeader(slide, insightTitle(result), primary, secondary, result.title);
 
   const svg = renderWorkforceMapSvg(result, primary, 1200, 560);
   const png = svgToPng(svg);
-  const imgH = SLIDE_H - 2.3;
+  const imgH = 4.55;
   slide.addImage({
     data: `image/png;base64,${png.toString("base64")}`,
     x: 0.6,
@@ -1657,7 +1949,7 @@ function addMapSlide(
     h: imgH,
   });
 
-  addCaption(slide, generateCaption(result), 1.15 + imgH + 0.1);
+  addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.05, 0.76);
 }
 
 function addPanelSlide(
@@ -1667,8 +1959,12 @@ function addPanelSlide(
   primary: string,
   secondary: string
 ) {
-  const slide = pres.addSlide();
-  addHeader(slide, title, primary, secondary);
+  const slide = addContentSlide(pres);
+  const panelHeadline =
+    title === "Coverage Tier Enrollment"
+      ? "Coverage tiers reveal how enrollment differs across core benefits"
+      : insightTitle(panels[0], title);
+  addHeader(slide, panelHeadline, primary, secondary, title);
 
   const colors = paletteFor(primary, secondary);
   const n = panels.length;
@@ -1676,7 +1972,7 @@ function addPanelSlide(
   const panelW = (SLIDE_W - gap * (n + 1)) / n;
   const panelTop = 1.25;
   const titleH = 0.45;
-  const imgH = 3.9;
+  const imgH = 3.45;
   const captionY = panelTop + titleH + imgH + 0.15;
 
   panels.forEach((result, i) => {
@@ -1722,7 +2018,7 @@ function addPanelSlide(
         x,
         y: captionY,
         w: panelW,
-        h: 0.6,
+        h: 0.5,
         fontSize: 11,
         italic: true,
         color: "4B5563",
@@ -1730,6 +2026,36 @@ function addPanelSlide(
       });
     }
   });
+
+  let panelTakeaway = panels.map((panel) => generateCaption(panel)).filter(Boolean).join("  ");
+  if (title === "Coverage Tier Enrollment") {
+    const leaders = panels.flatMap((panel) => {
+      if (panel.kind !== "bar" || panel.data.length === 0) return [];
+      const row = panel.data[0];
+      const ranked = panel.series
+        .map((series) => ({ label: series.label, value: Number(row[series.key]) || 0 }))
+        .sort((a, b) => b.value - a.value);
+      const total = ranked.reduce((sum, item) => sum + item.value, 0);
+      const benefit = panel.title.split(" ")[0];
+      return ranked[0] && total > 0
+        ? [{ benefit, label: ranked[0].label, share: Math.round((ranked[0].value / total) * 100) }]
+        : [];
+    });
+    if (leaders.length > 0 && leaders.every((leader) => leader.label === leaders[0].label)) {
+      panelTakeaway = `${leaders[0].label} is the largest tier across ${leaders
+        .map((leader) => `${leader.benefit} (${leader.share}%)`)
+        .join(", ")}.`;
+    }
+  }
+
+  addTakeawayPanel(
+    slide,
+    panelTakeaway,
+    primary,
+    secondary,
+    6.08,
+    0.72
+  );
 }
 
 export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
@@ -1758,6 +2084,16 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
   const pres = new PptxGenJS();
   pres.defineLayout({ name: "WIDE", width: SLIDE_W, height: SLIDE_H });
   pres.layout = "WIDE";
+  pres.author = "Benefit HQ";
+  pres.company = planYear.client.name;
+  pres.subject = `Benefits renewal analysis for ${planYear.label}`;
+  pres.title = `${planYear.client.name} — ${planYear.label}`;
+  defineContentMaster(
+    pres,
+    planYear.client.name,
+    planYear.label,
+    planYear.effectiveDate
+  );
 
   // Title slide
   const titleSlide = pres.addSlide();
@@ -1781,20 +2117,35 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
 
   titleSlide.addText(planYear.client.name, {
     x: 0.6,
-    y: SLIDE_H / 2 - 0.9,
+    y: SLIDE_H / 2 - 1.05,
     w: SLIDE_W - 1.2,
     h: 1.4,
-    fontSize: 36,
+    fontSize: 42,
     bold: true,
     color: "FFFFFF",
+    margin: 0,
+    fit: "shrink",
   });
   titleSlide.addText(`Benefits Renewal Analysis — ${planYear.label}`, {
     x: 0.6,
-    y: SLIDE_H / 2 + 0.5,
+    y: SLIDE_H / 2 + 0.42,
     w: SLIDE_W - 1.2,
     h: 0.6,
-    fontSize: 18,
+    fontSize: 20,
     color: stripHash(secondary),
+    margin: 0,
+  });
+  titleSlide.addText("PREPARED FOR BENEFITS PLANNING", {
+    x: 2.25,
+    y: 0.62,
+    w: 4.5,
+    h: 0.18,
+    fontSize: 8.5,
+    bold: true,
+    color: "FFFFFF",
+    transparency: 18,
+    charSpacing: 1.1,
+    margin: 0,
   });
   titleSlide.addText(`Prepared ${formatDate(new Date())}`, {
     x: 0.6,
@@ -1814,6 +2165,23 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     CHART_GROUPS.filter((g) => g.keys.every((k) => isEnabled(k) && CHART_COMPUTE[k]))
   );
   const consumedKeys = new Set<string>();
+  const renderedResults: ChartResult[] = [];
+  let currentCategory: string | null = null;
+  let sectionNumber = 0;
+  const ensureSection = (category: string) => {
+    if (category === currentCategory) return;
+    currentCategory = category;
+    sectionNumber += 1;
+    addSectionDividerSlide(
+      pres,
+      category,
+      sectionNumber,
+      primary,
+      secondary,
+      planYear.client.name,
+      planYear.label
+    );
+  };
 
   // Chart/table slides, in catalog order, for every enabled chart with data
   for (const def of chartDefinitions) {
@@ -1822,6 +2190,8 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     const group = keyToGroup.get(def.key);
     if (group && activeGroups.has(group)) {
       const panelResults = group.keys.map((k) => CHART_COMPUTE[k](dataset));
+      ensureSection(def.category);
+      renderedResults.push(...panelResults);
       if (group.title === "Coverage Tier Enrollment") {
         const tierResults = panelResults.filter(
           (result): result is Extract<ChartResult, { kind: "bar" }> =>
@@ -1855,17 +2225,19 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     const result = compute(dataset);
     const view = selectedView(def.key);
 
+    if (result.kind === "renewal" && !result.available) continue;
+    ensureSection(def.category);
+    renderedResults.push(result);
+
     if (result.kind === "executive") addExecutiveSummarySlide(pres, result, primary, secondary);
     else if (result.kind === "risk") addWorkforceRiskSlide(pres, result, primary, secondary);
     else if (result.kind === "quality") addDataQualitySlide(pres, result, primary, secondary);
     else if (result.kind === "renewal") {
-      if (result.available) {
-        if (view === "bar")
-          addBarSlide(pres, renewalBarResult(result), primary, secondary, {
-            valueFormat: "currency",
-          });
-        else addRenewalComparisonSlides(pres, result, primary, secondary);
-      }
+      if (view === "bar")
+        addBarSlide(pres, renewalBarResult(result), primary, secondary, {
+          valueFormat: "currency",
+        });
+      else addRenewalComparisonSlides(pres, result, primary, secondary);
     }
     else if (result.kind === "participation") {
       if (view === "table")
@@ -1916,6 +2288,13 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     }
     else addTableSlide(pres, result, primary, secondary);
   }
+
+  addRecommendationsSlide(
+    pres,
+    buildDeckRecommendations(renderedResults),
+    primary,
+    secondary
+  );
 
   const output = await pres.write({ outputType: "nodebuffer" });
   return Buffer.from(output as Uint8Array);
