@@ -11,6 +11,7 @@ export function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +23,7 @@ export function RegisterForm() {
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, setupToken }),
     });
 
     if (!res.ok) {
@@ -87,6 +88,20 @@ export function RegisterForm() {
           className="mb-1.5 w-full rounded-[10px] border border-input-border px-3.5 py-3 text-sm focus:border-teal-deep focus:outline-none"
         />
         <p className="mb-[18px] text-[11px] text-text-400">Minimum 8 characters</p>
+        <label className="mb-1.5 block text-[13px] font-semibold text-text-900">
+          Workspace setup token
+        </label>
+        <input
+          type="password"
+          required
+          autoComplete="off"
+          value={setupToken}
+          onChange={(e) => setSetupToken(e.target.value)}
+          className="mb-1.5 w-full rounded-[10px] border border-input-border px-3.5 py-3 text-sm focus:border-teal-deep focus:outline-none"
+        />
+        <p className="mb-[18px] text-[11px] text-text-400">
+          Provided by the person deploying Benefit HQ
+        </p>
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
         <button
           type="submit"

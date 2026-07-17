@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { saveLogo } from "@/lib/storage";
+import { deleteStoredFile, saveLogo, storedLogoPathFromUrl } from "@/lib/storage";
+import { detectLogoType } from "@/lib/uploads";
 import { clientSchema } from "@/lib/validation";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
-const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
-
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -30,28 +29,36 @@ export async function POST(request: Request) {
   let logoPath: string | undefined;
   const logo = formData.get("logo");
   if (logo instanceof File && logo.size > 0) {
-    if (!ALLOWED_LOGO_TYPES.includes(logo.type)) {
-      return NextResponse.json(
-        { error: "Logo must be a PNG, JPEG, WebP, or SVG image" },
-        { status: 400 }
-      );
-    }
     if (logo.size > MAX_LOGO_BYTES) {
       return NextResponse.json({ error: "Logo must be under 5MB" }, { status: 400 });
     }
     const buffer = Buffer.from(await logo.arrayBuffer());
-    logoPath = await saveLogo(logo.name, buffer);
+    const logoType = detectLogoType(buffer);
+    if (!logoType) {
+      return NextResponse.json(
+        { error: "Logo must be a valid PNG, JPEG, or WebP image" },
+        { status: 400 }
+      );
+    }
+    logoPath = await saveLogo(logoType.extension, buffer);
   }
 
-  const client = await prisma.client.create({
-    data: {
-      name: parsed.data.name,
-      primaryColor: parsed.data.primaryColor,
-      secondaryColor: parsed.data.secondaryColor,
-      logoPath,
-      createdById: session.user.id,
-    },
-  });
+  let client;
+  try {
+    client = await prisma.client.create({
+      data: {
+        name: parsed.data.name,
+        primaryColor: parsed.data.primaryColor,
+        secondaryColor: parsed.data.secondaryColor,
+        logoPath,
+        createdById: session.user.id,
+      },
+    });
+  } catch (error) {
+    const storedLogo = storedLogoPathFromUrl(logoPath);
+    if (storedLogo) await deleteStoredFile(storedLogo);
+    throw error;
+  }
 
   return NextResponse.json({ id: client.id });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { policyLineSchema } from "@/lib/validation";
+import { addCurrencyAmounts, policyLineSchema } from "@/lib/validation";
 
 export async function POST(
   request: Request,
@@ -27,9 +27,34 @@ export async function POST(
     );
   }
 
-  const policyLine = await prisma.policyLine.create({
-    data: { planYearId, ...parsed.data },
+  const policyLine = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${planYearId}, 0))`;
+    const existingRatePeriod = await tx.policyLine.findFirst({
+      where: { planYearId },
+      select: { ratePeriod: true },
+    });
+    if (existingRatePeriod && existingRatePeriod.ratePeriod !== parsed.data.ratePeriod) {
+      return null;
+    }
+
+    return tx.policyLine.create({
+      data: {
+        planYearId,
+        ...parsed.data,
+        totalPremium: addCurrencyAmounts(
+          parsed.data.employeeCost,
+          parsed.data.employerCost
+        ),
+      },
+    });
   });
+
+  if (!policyLine) {
+    return NextResponse.json(
+      { error: "All policy rates in a plan year must use the same rate period" },
+      { status: 400 }
+    );
+  }
 
   return NextResponse.json({ id: policyLine.id });
 }

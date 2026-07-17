@@ -20,9 +20,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, password, isAdmin } = parsed.data;
+  const { name, password, isAdmin } = parsed.data;
+  const email = parsed.data.email.trim().toLowerCase();
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
   if (existing) {
     return NextResponse.json(
       { error: "An account with that email already exists" },
@@ -32,7 +35,7 @@ export async function POST(request: Request) {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
-    data: { name, email, passwordHash, isAdmin },
+    data: { name: name.trim(), email, passwordHash, isAdmin },
   });
 
   return NextResponse.json({ id: user.id });

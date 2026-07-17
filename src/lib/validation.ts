@@ -26,14 +26,26 @@ export const COVERAGE_TYPES = [
 
 export const TIERS = ["EE", "EE+Spouse", "EE+Child", "Family"] as const;
 
+export const RATE_PERIODS = ["monthly", "per-pay-period", "annual"] as const;
+
+export const RATE_PERIOD_LABELS: Record<(typeof RATE_PERIODS)[number], string> = {
+  monthly: "Monthly",
+  "per-pay-period": "Per pay period",
+  annual: "Annual",
+};
+
 export const policyLineSchema = z.object({
   coverageType: z.enum(COVERAGE_TYPES),
   planName: z.string().min(1, "Plan name is required").max(200),
   tier: z.enum(TIERS),
-  employeeCost: z.coerce.number().min(0),
-  employerCost: z.coerce.number().min(0),
-  totalPremium: z.coerce.number().min(0),
+  employeeCost: z.coerce.number().min(0).max(9_999_999.99),
+  employerCost: z.coerce.number().min(0).max(9_999_999.99),
+  ratePeriod: z.enum(RATE_PERIODS),
 });
+
+export function addCurrencyAmounts(left: number, right: number): number {
+  return (Math.round(left * 100) + Math.round(right * 100)) / 100;
+}
 
 export const userSchema = z.object({
   name: z.string().min(1, "Name is required"),

@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { COVERAGE_TYPES, TIERS } from "@/lib/validation";
+import {
+  COVERAGE_TYPES,
+  RATE_PERIOD_LABELS,
+  RATE_PERIODS,
+  TIERS,
+  addCurrencyAmounts,
+} from "@/lib/validation";
 
 type PolicyLine = {
   id: string;
@@ -12,6 +18,7 @@ type PolicyLine = {
   employeeCost: string;
   employerCost: string;
   totalPremium: string;
+  ratePeriod: string;
 };
 
 const inputClass =
@@ -31,7 +38,9 @@ export function PolicyLinesEditor({
   const [tier, setTier] = useState<string>(TIERS[0]);
   const [employeeCost, setEmployeeCost] = useState("");
   const [employerCost, setEmployerCost] = useState("");
-  const [totalPremium, setTotalPremium] = useState("");
+  const [ratePeriod, setRatePeriod] = useState(
+    initialPolicyLines[0]?.ratePeriod ?? RATE_PERIODS[0]
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -49,7 +58,7 @@ export function PolicyLinesEditor({
         tier,
         employeeCost,
         employerCost,
-        totalPremium,
+        ratePeriod,
       }),
     });
 
@@ -64,7 +73,6 @@ export function PolicyLinesEditor({
     setPlanName("");
     setEmployeeCost("");
     setEmployerCost("");
-    setTotalPremium("");
     router.refresh();
   }
 
@@ -98,6 +106,9 @@ export function PolicyLinesEditor({
                 <th className="px-5 py-3 text-right text-xs font-semibold text-text-600">
                   Total premium
                 </th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">
+                  Rate period
+                </th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
@@ -115,6 +126,10 @@ export function PolicyLinesEditor({
                   </td>
                   <td className="px-5 py-3 text-right text-text-900">
                     ${line.totalPremium}
+                  </td>
+                  <td className="px-5 py-3 text-text-900">
+                    {RATE_PERIOD_LABELS[line.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ??
+                      line.ratePeriod}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <button
@@ -200,14 +215,31 @@ export function PolicyLinesEditor({
         <div>
           <label className={labelClass}>Total premium</label>
           <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={totalPremium}
-            onChange={(e) => setTotalPremium(e.target.value)}
+            type="text"
+            readOnly
+            aria-label="Calculated total premium"
+            value={
+              employeeCost !== "" && employerCost !== ""
+                ? addCurrencyAmounts(Number(employeeCost), Number(employerCost)).toFixed(2)
+                : ""
+            }
             className={`${inputClass} w-[100px]`}
           />
+        </div>
+        <div>
+          <label className={labelClass}>Rate period</label>
+          <select
+            value={ratePeriod}
+            onChange={(e) => setRatePeriod(e.target.value)}
+            disabled={initialPolicyLines.length > 0}
+            className={inputClass}
+          >
+            {RATE_PERIODS.map((period) => (
+              <option key={period} value={period}>
+                {RATE_PERIOD_LABELS[period]}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           type="submit"

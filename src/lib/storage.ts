@@ -1,25 +1,32 @@
-import { mkdir, writeFile, readFile } from "fs/promises";
+import { mkdir, writeFile, readFile, unlink } from "fs/promises";
+import { randomUUID } from "crypto";
 import path from "path";
 
-const PRIVATE_STORAGE_DIR = path.resolve(
-  process.cwd(),
-  process.env.STORAGE_DIR ?? "./storage"
-);
-// Logos are non-sensitive brand assets, so they're served directly as static
-// files from /public rather than through an authenticated download route.
-const PUBLIC_UPLOADS_DIR = path.resolve(process.cwd(), "public/uploads/logos");
-
-export type PrivateBucket = "decks" | "uploads";
+const PRIVATE_STORAGE_DIR = process.env.STORAGE_DIR
+  ? path.resolve(/* turbopackIgnore: true */ process.env.STORAGE_DIR)
+  : path.join(/* turbopackIgnore: true */ process.cwd(), "storage");
+export type PrivateBucket = "decks" | "logos";
 
 function safeFilename(filename: string): string {
-  return `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const cleaned = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `${randomUUID()}-${cleaned}`;
 }
 
-export async function saveLogo(filename: string, data: Buffer): Promise<string> {
-  await mkdir(PUBLIC_UPLOADS_DIR, { recursive: true });
-  const safeName = safeFilename(filename);
-  await writeFile(path.join(PUBLIC_UPLOADS_DIR, safeName), data);
-  return `/uploads/logos/${safeName}`;
+function resolveStoredPath(relativePath: string): string {
+  const resolved = path.resolve(PRIVATE_STORAGE_DIR, relativePath);
+  const storagePrefix = `${PRIVATE_STORAGE_DIR}${path.sep}`;
+  if (!resolved.startsWith(storagePrefix)) {
+    throw new Error("Invalid storage path");
+  }
+  return resolved;
+}
+
+export async function saveLogo(
+  extension: "png" | "jpg" | "webp",
+  data: Buffer
+): Promise<string> {
+  const relativePath = await saveFile("logos", `logo.${extension}`, data);
+  return `/api/logos/${path.basename(relativePath)}`;
 }
 
 export async function saveFile(
@@ -28,16 +35,30 @@ export async function saveFile(
   data: Buffer
 ): Promise<string> {
   const dir = path.join(PRIVATE_STORAGE_DIR, bucket);
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   const safeName = safeFilename(filename);
-  await writeFile(path.join(dir, safeName), data);
+  await writeFile(path.join(dir, safeName), data, { mode: 0o600 });
   return path.join(bucket, safeName);
 }
 
 export async function readStoredFile(relativePath: string): Promise<Buffer> {
-  return readFile(path.join(PRIVATE_STORAGE_DIR, relativePath));
+  return readFile(resolveStoredPath(relativePath));
 }
 
 export function storedFilePath(relativePath: string): string {
-  return path.join(PRIVATE_STORAGE_DIR, relativePath);
+  return resolveStoredPath(relativePath);
+}
+
+export async function deleteStoredFile(relativePath: string): Promise<void> {
+  await unlink(resolveStoredPath(relativePath)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+}
+
+export function storedLogoPathFromUrl(logoUrl: string | null | undefined): string | null {
+  const prefix = "/api/logos/";
+  if (!logoUrl?.startsWith(prefix)) return null;
+  const filename = logoUrl.slice(prefix.length);
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
+  return path.join("logos", filename);
 }

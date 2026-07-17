@@ -1,6 +1,7 @@
 import type { ChartDataset } from "./dataset";
 import { ageInYears, tenureInYears } from "./dataset";
 import type { ChartResult } from "./types";
+import { RATE_PERIOD_LABELS } from "@/lib/validation";
 
 type Employee = ChartDataset["employees"][number];
 type Election = Employee["elections"][number];
@@ -299,11 +300,20 @@ function computePremiumSummaryTable(ds: ChartDataset): ChartResult {
     `$${Number(line.employeeCost).toFixed(2)}`,
     `$${Number(line.employerCost).toFixed(2)}`,
     `$${Number(line.totalPremium).toFixed(2)}`,
+    RATE_PERIOD_LABELS[line.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? line.ratePeriod,
   ]);
   return {
     kind: "table",
     title: "Premium Summary by Tier",
-    columns: ["Coverage", "Plan", "Tier", "Employee cost", "Employer cost", "Total premium"],
+    columns: [
+      "Coverage",
+      "Plan",
+      "Tier",
+      "Employee cost",
+      "Employer cost",
+      "Total premium",
+      "Rate period",
+    ],
     rows,
   };
 }
@@ -490,7 +500,7 @@ function computeCostByCoverageSummary(ds: ChartDataset): ChartResult {
   ]);
   return {
     kind: "table",
-    title: "Cost Summary by Coverage Type",
+    title: `Cost Summary by Coverage Type (${RATE_PERIOD_LABELS[ds.policyLines[0]?.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? "Rate"})`,
     columns: ["Coverage", "Employee cost", "Employer cost", "Total premium"],
     rows,
   };
@@ -505,7 +515,7 @@ function computeEmployerEmployeeCostSplit(ds: ChartDataset): ChartResult {
   }
   return {
     kind: "pie",
-    title: "Employer vs. Employee Cost Split",
+    title: `Employer vs. Employee Cost Split (${RATE_PERIOD_LABELS[ds.policyLines[0]?.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? "Rate"})`,
     data: [
       { name: "Employer", value: Math.round(employerTotal * 100) / 100 },
       { name: "Employee", value: Math.round(employeeTotal * 100) / 100 },

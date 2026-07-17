@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseWorkbook } from "@/lib/census/parseWorkbook";
 import { normalizeCensus } from "@/lib/census/normalize";
 import { persistCensus } from "@/lib/census/persist";
+import { isXlsxFile } from "@/lib/uploads";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -34,6 +35,12 @@ export async function POST(
   // The workbook contains SSNs used only to join sheets in-memory below; the
   // raw file is never written to disk and SSNs are discarded once normalized.
   const buffer = Buffer.from(await file.arrayBuffer());
+  if (!isXlsxFile(buffer)) {
+    return NextResponse.json(
+      { error: "The uploaded file is not a valid .xlsx workbook" },
+      { status: 400 }
+    );
+  }
 
   let result;
   try {
@@ -59,16 +66,8 @@ export async function POST(
     return NextResponse.json({ error: result.warnings[0], warnings: result.warnings }, { status: 422 });
   }
 
-  await persistCensus(planYearId, result);
-
-  const censusUpload = await prisma.censusUpload.create({
-    data: {
-      planYearId,
-      filenames: [file.name],
-      status: "committed",
-      warnings: result.warnings,
-      summary: result.summary,
-    },
+  const censusUpload = await persistCensus(planYearId, result, {
+    filenames: [file.name],
   });
 
   return NextResponse.json({

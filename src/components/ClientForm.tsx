@@ -88,7 +88,7 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
           )}
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            accept="image/png,image/jpeg,image/webp"
             onChange={handleLogoChange}
             className="text-[13px] text-text-600"
           />

@@ -39,7 +39,7 @@ export function LoginForm({ showSignUp }: { showSignUp: boolean }) {
     <AuthShell
       heading="From census data to a client-ready proposal."
       description="Manage clients, plan years, and census data, then generate a branded benefits deck in minutes."
-      statusNote="Every client is tenant-isolated end to end."
+      statusNote="Protected access for your firm's shared workspace."
       cardEyebrow="Welcome back"
       cardTitle="Sign in"
     >

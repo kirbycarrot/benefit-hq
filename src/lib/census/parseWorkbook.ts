@@ -1,5 +1,9 @@
 import ExcelJS from "exceljs";
 
+const MAX_WORKSHEETS = 20;
+const MAX_WORKBOOK_ROWS = 100_000;
+const MAX_WORKSHEET_COLUMNS = 256;
+
 export type RawRow = (string | number | Date | undefined)[];
 
 export type ParsedSheet = {
@@ -41,10 +45,25 @@ export async function parseWorkbook(buffer: Buffer): Promise<ParsedSheet[]> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
 
+  if (workbook.worksheets.length > MAX_WORKSHEETS) {
+    throw new Error(`Workbook has more than ${MAX_WORKSHEETS} worksheets`);
+  }
+
   const sheets: ParsedSheet[] = [];
+  let workbookRowCount = 0;
 
   for (const worksheet of workbook.worksheets) {
     const columnCount = Math.max(worksheet.columnCount, worksheet.actualColumnCount, 1);
+    if (columnCount > MAX_WORKSHEET_COLUMNS) {
+      throw new Error(
+        `Worksheet ${worksheet.name} has more than ${MAX_WORKSHEET_COLUMNS} columns`
+      );
+    }
+
+    workbookRowCount += worksheet.actualRowCount;
+    if (workbookRowCount > MAX_WORKBOOK_ROWS) {
+      throw new Error(`Workbook has more than ${MAX_WORKBOOK_ROWS} rows`);
+    }
 
     let headerRow: (string | undefined)[] | null = null;
     const dataRows: RawRow[] = [];

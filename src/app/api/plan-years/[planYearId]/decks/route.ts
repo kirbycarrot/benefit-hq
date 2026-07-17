@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateDeckBuffer } from "@/lib/deck/generate";
-import { saveFile } from "@/lib/storage";
+import { deleteStoredFile, saveFile } from "@/lib/storage";
 
 export async function POST(
   _request: Request,
@@ -32,10 +32,11 @@ export async function POST(
     data: { planYearId, status: "generating" },
   });
 
+  let filePath: string | null = null;
   try {
     const buffer = await generateDeckBuffer(planYearId);
     const filename = `${planYear.client.name.replace(/[^a-zA-Z0-9]+/g, "-")}-${planYear.label.replace(/[^a-zA-Z0-9]+/g, "-")}.pptx`;
-    const filePath = await saveFile("decks", filename, buffer);
+    filePath = await saveFile("decks", filename, buffer);
 
     const updated = await prisma.deck.update({
       where: { id: deck.id },
@@ -44,6 +45,7 @@ export async function POST(
 
     return NextResponse.json({ id: updated.id });
   } catch (error) {
+    if (filePath) await deleteStoredFile(filePath);
     await prisma.deck.update({ where: { id: deck.id }, data: { status: "failed" } });
     console.error("Deck generation failed", error);
     return NextResponse.json({ error: "Deck generation failed" }, { status: 500 });

@@ -35,6 +35,7 @@ export default async function PlanYearDetailPage({
     employeeCost: line.employeeCost.toFixed(2),
     employerCost: line.employerCost.toFixed(2),
     totalPremium: line.totalPremium.toFixed(2),
+    ratePeriod: line.ratePeriod,
   }));
 
   return (

@@ -62,6 +62,7 @@ model PolicyLine {
   employeeCost  Decimal  @db.Decimal(10, 2)
   employerCost  Decimal  @db.Decimal(10, 2)
   totalPremium  Decimal  @db.Decimal(10, 2)
+  ratePeriod    String   @default("monthly")
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
 }
