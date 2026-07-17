@@ -112,28 +112,28 @@ export function PolicyLinesEditor({
     <div>
       {initialPolicyLines.length > 0 && (
         <div className="mb-3.5 overflow-x-auto rounded-[14px] border border-border-light bg-white shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="bg-panel-tint">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-left text-xs font-semibold whitespace-nowrap text-text-600">
                   Coverage
                 </th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-left text-xs font-semibold whitespace-nowrap text-text-600">
                   Plan
                 </th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-left text-xs font-semibold whitespace-nowrap text-text-600">
                   Tier
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-right text-xs font-semibold whitespace-nowrap text-text-600">
                   Employee cost
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-right text-xs font-semibold whitespace-nowrap text-text-600">
                   Employer cost
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-right text-xs font-semibold whitespace-nowrap text-text-600">
                   Total premium
                 </th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">
+                <th className="px-5 py-3 text-left text-xs font-semibold whitespace-nowrap text-text-600">
                   Rate period
                 </th>
                 <th className="px-5 py-3" />
@@ -177,14 +177,14 @@ export function PolicyLinesEditor({
 
       <form
         onSubmit={handleAdd}
-        className="flex flex-wrap items-end gap-[14px] rounded-[14px] border border-dashed border-input-border p-5"
+        className="flex flex-wrap items-end gap-[14px] rounded-[14px] border border-dashed border-input-border p-4 sm:p-5"
       >
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Coverage</label>
           <select
             value={coverageType}
             onChange={(e) => setCoverageType(e.target.value)}
-            className={`${inputClass} w-[140px]`}
+            className={`${inputClass} w-full sm:w-[140px]`}
           >
             {COVERAGE_TYPES.map((c) => (
               <option key={c} value={c}>
@@ -193,22 +193,22 @@ export function PolicyLinesEditor({
             ))}
           </select>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Plan name</label>
           <input
             type="text"
             required
             value={planName}
             onChange={(e) => setPlanName(e.target.value)}
-            className={`${inputClass} w-[180px]`}
+            className={`${inputClass} w-full sm:w-[180px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Tier</label>
           <select
             value={tier}
             onChange={(e) => setTier(e.target.value)}
-            className={`${inputClass} w-[170px]`}
+            className={`${inputClass} w-full sm:w-[170px]`}
           >
             {TIERS.map((t) => (
               <option key={t} value={t}>
@@ -217,7 +217,7 @@ export function PolicyLinesEditor({
             ))}
           </select>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Employee cost</label>
           <input
             type="number"
@@ -226,10 +226,10 @@ export function PolicyLinesEditor({
             required
             value={employeeCost}
             onChange={(e) => setEmployeeCost(e.target.value)}
-            className={`${inputClass} w-[100px]`}
+            className={`${inputClass} w-full sm:w-[130px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Employer cost</label>
           <input
             type="number"
@@ -238,10 +238,10 @@ export function PolicyLinesEditor({
             required
             value={employerCost}
             onChange={(e) => setEmployerCost(e.target.value)}
-            className={`${inputClass} w-[100px]`}
+            className={`${inputClass} w-full sm:w-[130px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Total premium</label>
           <input
             type="text"
@@ -252,10 +252,10 @@ export function PolicyLinesEditor({
                 ? addCurrencyAmounts(Number(employeeCost), Number(employerCost)).toFixed(2)
                 : ""
             }
-            className={`${inputClass} w-[100px]`}
+            className={`${inputClass} w-full sm:w-[130px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>
             Rate period
             {savingRatePeriod && (
@@ -266,7 +266,7 @@ export function PolicyLinesEditor({
             value={ratePeriod}
             onChange={(e) => void handleRatePeriodChange(e.target.value)}
             disabled={savingRatePeriod}
-            className={`${inputClass} w-[150px]`}
+            className={`${inputClass} w-full sm:w-[150px]`}
           >
             {RATE_PERIODS.map((period) => (
               <option key={period} value={period}>
@@ -278,7 +278,7 @@ export function PolicyLinesEditor({
         <button
           type="submit"
           disabled={loading || savingRatePeriod}
-          className="h-11 rounded-full bg-ink-900 px-5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
+          className="h-11 w-full rounded-full bg-ink-900 px-5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50 sm:w-auto"
         >
           {loading ? "Adding..." : "Add line"}
         </button>

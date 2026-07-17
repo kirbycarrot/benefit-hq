@@ -51,15 +51,17 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-[14px] border border-border-light bg-white p-[26px] shadow-[0_1px_2px_rgba(20,24,26,0.04)]"
+      className="rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-[26px]"
     >
       <div className="mb-[22px] flex flex-wrap items-end gap-4">
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="mb-1.5 block text-xs font-semibold text-text-900">
             Census workbook (.xlsx)
           </label>
-          <label className="flex cursor-pointer items-center rounded-[10px] border border-dashed border-text-300 px-4 py-2.5 text-[13px] text-text-400">
-            {file ? file.name : "Choose file — no file chosen"}
+          <label className="flex min-h-11 w-full cursor-pointer items-center rounded-[10px] border border-dashed border-text-300 px-4 py-2.5 text-[13px] text-text-400 sm:w-auto">
+            <span className="min-w-0 break-all">
+              {file ? file.name : "Choose file — no file chosen"}
+            </span>
             <input
               type="file"
               accept=".xlsx"
@@ -71,7 +73,7 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
         <button
           type="submit"
           disabled={!file || loading}
-          className="rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
+          className="w-full rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50 sm:w-auto"
         >
           {loading ? "Processing..." : "Upload census"}
         </button>

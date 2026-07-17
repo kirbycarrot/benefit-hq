@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { loadChartDataset } from "@/lib/charts/dataset";
 import { CHART_COMPUTE } from "@/lib/charts/compute";
 import { renderBarChartSvg, renderPieChartSvg, svgToPng } from "@/lib/charts/svgRender";
+import { renderWorkforceMapSvg } from "@/lib/geography/mapRender";
 import { generateCaption } from "@/lib/deck/captions";
 import { formatDate } from "@/lib/date";
 import type { ChartResult } from "@/lib/charts/types";
@@ -63,6 +64,305 @@ function addCaption(slide: PptxGenJS.Slide, caption: string, y: number) {
     italic: true,
     color: "4B5563",
     align: "center",
+  });
+}
+
+export function addExecutiveSummarySlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "executive" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = pres.addSlide();
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  addHeader(slide, result.title, primary, secondary);
+
+  const margin = 0.48;
+  const gap = 0.16;
+  const cardY = 1.25;
+  const cardH = 1.65;
+  const cardW = (SLIDE_W - margin * 2 - gap * (result.metrics.length - 1)) / result.metrics.length;
+
+  result.metrics.forEach((metric, index) => {
+    const x = margin + index * (cardW + gap);
+    slide.addShape("roundRect", {
+      x,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      fill: { color: "F7F8F7" },
+      line: { color: "E5E7EB", pt: 0.6 },
+      rectRadius: 0.06,
+    });
+    slide.addShape("rect", {
+      x,
+      y: cardY,
+      w: cardW,
+      h: 0.08,
+      fill: { color: secondaryColor },
+      line: { color: secondaryColor, transparency: 100 },
+    });
+    slide.addText(metric.value, {
+      x: x + 0.16,
+      y: cardY + 0.22,
+      w: cardW - 0.32,
+      h: 0.55,
+      fontSize: metric.value.length > 12 ? 20 : 26,
+      bold: true,
+      color: primaryColor,
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(metric.label, {
+      x: x + 0.16,
+      y: cardY + 0.83,
+      w: cardW - 0.32,
+      h: 0.3,
+      fontSize: 11.5,
+      bold: true,
+      color: "374151",
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(metric.detail, {
+      x: x + 0.16,
+      y: cardY + 1.19,
+      w: cardW - 0.32,
+      h: 0.25,
+      fontSize: 8.5,
+      color: "6B7280",
+      margin: 0,
+      fit: "shrink",
+    });
+  });
+
+  const panelX = margin;
+  const panelY = 3.25;
+  const panelW = SLIDE_W - margin * 2;
+  const panelH = 3.65;
+  slide.addShape("roundRect", {
+    x: panelX,
+    y: panelY,
+    w: panelW,
+    h: panelH,
+    fill: { color: "F7F8F7" },
+    line: { color: "F7F8F7", transparency: 100 },
+    rectRadius: 0.06,
+  });
+  slide.addText("KEY OBSERVATIONS", {
+    x: panelX + 0.35,
+    y: panelY + 0.27,
+    w: panelW - 0.7,
+    h: 0.3,
+    fontSize: 11,
+    bold: true,
+    color: "6B7280",
+    charSpacing: 1.2,
+    margin: 0,
+  });
+
+  result.observations.slice(0, 3).forEach((observation, index) => {
+    const rowY = panelY + 0.78 + index * 0.88;
+    slide.addShape("ellipse", {
+      x: panelX + 0.35,
+      y: rowY,
+      w: 0.35,
+      h: 0.35,
+      fill: { color: primaryColor },
+      line: { color: primaryColor, transparency: 100 },
+    });
+    slide.addText(String(index + 1), {
+      x: panelX + 0.35,
+      y: rowY,
+      w: 0.35,
+      h: 0.35,
+      align: "center",
+      valign: "middle",
+      fontSize: 9,
+      bold: true,
+      color: "FFFFFF",
+      margin: 0,
+    });
+    slide.addText(observation, {
+      x: panelX + 0.88,
+      y: rowY - 0.04,
+      w: panelW - 1.25,
+      h: 0.55,
+      fontSize: 14,
+      color: "273036",
+      breakLine: false,
+      margin: 0,
+      fit: "shrink",
+      valign: "middle",
+    });
+  });
+}
+
+export function addBenefitsParticipationSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "participation" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = pres.addSlide();
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  const waivedColor = "D97706";
+  const unreportedColor = "C9CDD1";
+  addHeader(slide, result.title, primary, secondary);
+
+  slide.addText("Eligible employees flow to enrolled, waived, or not recorded for each benefit.", {
+    x: 0.55,
+    y: 1.08,
+    w: SLIDE_W - 1.1,
+    h: 0.32,
+    fontSize: 11.5,
+    color: "6B7280",
+    margin: 0,
+  });
+
+  const rowX = 0.5;
+  const rowW = SLIDE_W - 1;
+  const rowH = 1.43;
+  const rowStart = 1.52;
+  const rowGap = 0.25;
+
+  result.benefits.forEach((benefit, index) => {
+    const y = rowStart + index * (rowH + rowGap);
+    slide.addShape("roundRect", {
+      x: rowX,
+      y,
+      w: rowW,
+      h: rowH,
+      fill: { color: "F7F8F7" },
+      line: { color: "E5E7EB", pt: 0.6 },
+      rectRadius: 0.05,
+    });
+
+    slide.addText(benefit.name, {
+      x: rowX + 0.28,
+      y: y + 0.22,
+      w: 1.8,
+      h: 0.3,
+      fontSize: 17,
+      bold: true,
+      color: "273036",
+      margin: 0,
+    });
+    slide.addText(`${benefit.participation.toFixed(1)}%`, {
+      x: rowX + 0.28,
+      y: y + 0.57,
+      w: 1.8,
+      h: 0.46,
+      fontSize: 25,
+      bold: true,
+      color: primaryColor,
+      margin: 0,
+    });
+    slide.addText("participation", {
+      x: rowX + 0.28,
+      y: y + 1.05,
+      w: 1.8,
+      h: 0.2,
+      fontSize: 9,
+      color: "6B7280",
+      margin: 0,
+    });
+    slide.addShape("line", {
+      x: rowX + 2.2,
+      y: y + 0.2,
+      w: 0,
+      h: rowH - 0.4,
+      line: { color: "DDE0E2", pt: 1 },
+    });
+
+    const metrics = [
+      { label: "Eligible", value: benefit.eligible, color: "273036" },
+      { label: "Enrolled", value: benefit.enrolled, color: primaryColor },
+      { label: "Waived", value: benefit.waived, color: waivedColor },
+      { label: "Not recorded", value: benefit.unreported, color: "6B7280" },
+    ];
+    const metricStartX = rowX + 2.55;
+    const metricW = 2.25;
+    metrics.forEach((metric, metricIndex) => {
+      const x = metricStartX + metricIndex * metricW;
+      slide.addText(String(metric.value), {
+        x,
+        y: y + 0.2,
+        w: metricW - 0.25,
+        h: 0.38,
+        fontSize: 20,
+        bold: true,
+        color: metric.color,
+        margin: 0,
+      });
+      slide.addText(metric.label, {
+        x,
+        y: y + 0.61,
+        w: metricW - 0.25,
+        h: 0.2,
+        fontSize: 9.5,
+        color: "6B7280",
+        margin: 0,
+      });
+    });
+
+    const barX = metricStartX;
+    const barY = y + 1.01;
+    const barW = rowW - (barX - rowX) - 0.32;
+    const barH = 0.18;
+    slide.addShape("roundRect", {
+      x: barX,
+      y: barY,
+      w: barW,
+      h: barH,
+      fill: { color: "E5E7EB" },
+      line: { color: "E5E7EB", transparency: 100 },
+      rectRadius: 0.04,
+    });
+
+    if (benefit.eligible > 0) {
+      const enrolledW = barW * (benefit.enrolled / benefit.eligible);
+      const waivedW = barW * (benefit.waived / benefit.eligible);
+      const unreportedW = barW * (benefit.unreported / benefit.eligible);
+      let segmentX = barX;
+      for (const segment of [
+        { width: enrolledW, color: primaryColor },
+        { width: waivedW, color: waivedColor },
+        { width: unreportedW, color: unreportedColor },
+      ]) {
+        if (segment.width <= 0) continue;
+        slide.addShape("rect", {
+          x: segmentX,
+          y: barY,
+          w: segment.width,
+          h: barH,
+          fill: { color: segment.color },
+          line: { color: segment.color, transparency: 100 },
+        });
+        segmentX += segment.width;
+      }
+    }
+  });
+
+  slide.addShape("rect", {
+    x: 0.55,
+    y: 6.77,
+    w: 0.12,
+    h: 0.28,
+    fill: { color: secondaryColor },
+    line: { color: secondaryColor, transparency: 100 },
+  });
+  slide.addText(result.note, {
+    x: 0.78,
+    y: 6.74,
+    w: SLIDE_W - 1.35,
+    h: 0.34,
+    fontSize: 9.5,
+    color: "6B7280",
+    margin: 0,
+    fit: "shrink",
   });
 }
 
@@ -194,6 +494,29 @@ function addTableSlide(
   });
 
   addCaption(slide, generateCaption(result), SLIDE_H - 0.55);
+}
+
+function addMapSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "map" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = pres.addSlide();
+  addHeader(slide, result.title, primary, secondary);
+
+  const svg = renderWorkforceMapSvg(result, primary, 1200, 560);
+  const png = svgToPng(svg);
+  const imgH = SLIDE_H - 2.3;
+  slide.addImage({
+    data: `image/png;base64,${png.toString("base64")}`,
+    x: 0.6,
+    y: 1.15,
+    w: SLIDE_W - 1.2,
+    h: imgH,
+  });
+
+  addCaption(slide, generateCaption(result), 1.15 + imgH + 0.1);
 }
 
 function addPanelSlide(
@@ -368,9 +691,13 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     if (!compute) continue;
     const result = compute(dataset);
 
-    if (result.kind === "stats") addStatsSlide(pres, result, primary, secondary);
+    if (result.kind === "executive") addExecutiveSummarySlide(pres, result, primary, secondary);
+    else if (result.kind === "participation")
+      addBenefitsParticipationSlide(pres, result, primary, secondary);
+    else if (result.kind === "stats") addStatsSlide(pres, result, primary, secondary);
     else if (result.kind === "bar") addBarSlide(pres, result, primary, secondary);
     else if (result.kind === "pie") addPieSlide(pres, result, primary, secondary);
+    else if (result.kind === "map") addMapSlide(pres, result, primary, secondary);
     else addTableSlide(pres, result, primary, secondary);
   }
 

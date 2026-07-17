@@ -47,8 +47,8 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <div>
+    <form onSubmit={handleSubmit} className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+      <div className="w-full sm:w-auto">
         <label className="mb-1.5 block text-xs font-semibold text-text-600">Label</label>
         <input
           type="text"
@@ -56,10 +56,10 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
           placeholder="2026 Plan Year"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          className="rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none"
+          className="w-full rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none sm:w-auto"
         />
       </div>
-      <div>
+      <div className="w-full sm:w-auto">
         <label className="mb-1.5 block text-xs font-semibold text-text-600">
           Effective date
         </label>
@@ -68,17 +68,17 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
           required
           value={effectiveDate}
           onChange={(e) => setEffectiveDate(e.target.value)}
-          className="rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none"
+          className="w-full rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none sm:w-auto"
         />
       </div>
       <button
         type="submit"
         disabled={loading}
-        className="rounded-full bg-ink-900 px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50"
+        className="w-full rounded-full bg-ink-900 px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50 sm:w-auto"
       >
         {loading ? "Creating..." : "Create"}
       </button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="w-full text-sm text-destructive">{error}</p>}
     </form>
   );
 }

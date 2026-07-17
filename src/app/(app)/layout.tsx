@@ -18,7 +18,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         isAdmin={session.user?.isAdmin ?? false}
         signOutAction={signOutAction}
       />
-      <main className="px-11 py-10">{children}</main>
+      <main className="min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-11 lg:py-10">
+        {children}
+      </main>
     </div>
   );
 }

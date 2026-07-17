@@ -76,7 +76,7 @@ export function UsersManager({
   return (
     <div>
       <div className="mb-3.5 overflow-x-auto rounded-[14px] border border-border-light bg-white shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="bg-panel-tint">
               <th className="px-5 py-3 text-left text-xs font-semibold text-text-600">Name</th>
@@ -119,29 +119,29 @@ export function UsersManager({
 
       <form
         onSubmit={handleAdd}
-        className="flex flex-wrap items-end gap-[14px] rounded-[14px] border border-dashed border-input-border p-5"
+        className="flex flex-wrap items-end gap-[14px] rounded-[14px] border border-dashed border-input-border p-4 sm:p-5"
       >
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Name</label>
           <input
             type="text"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className={`${inputClass} w-[160px]`}
+            className={`${inputClass} w-full sm:w-[160px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Work email</label>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={`${inputClass} w-[220px]`}
+            className={`${inputClass} w-full sm:w-[220px]`}
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className={labelClass}>Password</label>
           <input
             type="password"
@@ -149,7 +149,7 @@ export function UsersManager({
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={`${inputClass} w-[160px]`}
+            className={`${inputClass} w-full sm:w-[160px]`}
           />
         </div>
         <label className="flex items-center gap-2 pb-2.5 text-[13px] font-semibold text-text-900">
@@ -164,7 +164,7 @@ export function UsersManager({
         <button
           type="submit"
           disabled={loading}
-          className="rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
+          className="w-full rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50 sm:w-auto"
         >
           {loading ? "Adding..." : "Add user"}
         </button>

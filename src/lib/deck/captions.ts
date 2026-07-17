@@ -3,6 +3,15 @@ import type { ChartResult } from "@/lib/charts/types";
 // Short, purely data-derived sentence per chart — no invented benchmarks or claims,
 // just a factual highlight computed from the same numbers shown in the chart/table.
 export function generateCaption(result: ChartResult): string {
+  if (result.kind === "map") {
+    const top = [...result.areas].sort((a, b) => b.value - a.value)[0];
+    if (!top) return "";
+    const share = result.mappedEmployees
+      ? Math.round((top.value / result.mappedEmployees) * 100)
+      : 0;
+    return `${top.name} has the largest mapped employee concentration: ${top.value} (${share}% of mapped employees).`;
+  }
+
   if (result.kind === "pie") {
     const total = result.data.reduce((sum, d) => sum + d.value, 0);
     const top = [...result.data].sort((a, b) => b.value - a.value)[0];

@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ChartResult } from "@/lib/charts/types";
+import { renderGeographyMapSvg } from "@/lib/geography/mapRender";
 
 type ChartDefinition = {
   key: string;
@@ -76,7 +77,7 @@ export function ChartSelectionScreen({
               return (
                 <div
                   key={def.key}
-                  className={`rounded-[14px] border bg-white p-[22px] shadow-[0_1px_2px_rgba(20,24,26,0.04)] ${
+                  className={`min-w-0 rounded-[14px] border bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-[22px] ${
                     enabled ? "border-border-light" : "border-border-lighter opacity-60"
                   }`}
                 >
@@ -111,6 +112,103 @@ export function ChartSelectionScreen({
 }
 
 function ChartPreview({ result }: { result: ChartResult }) {
+  if (result.kind === "executive") {
+    return (
+      <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-panel-tint">
+        <div className="grid grid-cols-2 gap-px bg-border-lighter sm:grid-cols-3 lg:grid-cols-5">
+          {result.metrics.map((metric) => (
+            <div key={metric.label} className="min-w-0 bg-white px-3 py-4 sm:px-4">
+              <p className="truncate text-xl font-extrabold text-text-900 sm:text-2xl">
+                {metric.value}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-text-600">{metric.label}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-text-400">{metric.detail}</p>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 sm:p-5">
+          <p className="text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+            Key observations
+          </p>
+          <div className="mt-3 space-y-3">
+            {result.observations.map((observation, index) => (
+              <div key={observation} className="flex items-start gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[11px] font-bold text-white">
+                  {index + 1}
+                </span>
+                <p className="pt-0.5 text-xs leading-5 text-text-600">{observation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (result.kind === "participation") {
+    return (
+      <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-3 sm:p-4">
+        <div className="grid gap-3 lg:grid-cols-3">
+          {result.benefits.map((benefit) => {
+            const enrolledWidth = benefit.eligible
+              ? (benefit.enrolled / benefit.eligible) * 100
+              : 0;
+            const waivedWidth = benefit.eligible
+              ? (benefit.waived / benefit.eligible) * 100
+              : 0;
+            const unreportedWidth = benefit.eligible
+              ? (benefit.unreported / benefit.eligible) * 100
+              : 0;
+
+            return (
+              <div key={benefit.name} className="rounded-[10px] bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-text-900">{benefit.name}</p>
+                    <p className="mt-0.5 text-[10px] text-text-400">
+                      {benefit.eligible} eligible employees
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-extrabold text-text-900">
+                      {benefit.participation.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-text-400">participation</p>
+                  </div>
+                </div>
+
+                <div
+                  className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-border-lighter"
+                  aria-label={`${benefit.name}: ${benefit.enrolled} enrolled, ${benefit.waived} waived, ${benefit.unreported} not recorded`}
+                >
+                  <span className="bg-ink-900" style={{ width: `${enrolledWidth}%` }} />
+                  <span className="bg-amber" style={{ width: `${waivedWidth}%` }} />
+                  <span className="bg-text-300" style={{ width: `${unreportedWidth}%` }} />
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-base font-bold text-text-900">{benefit.enrolled}</p>
+                    <p className="text-[10px] text-text-400">Enrolled</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-amber">{benefit.waived}</p>
+                    <p className="text-[10px] text-text-400">Waived</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-text-600">{benefit.unreported}</p>
+                    <p className="text-[10px] text-text-400">Not recorded</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-[10px] leading-4 text-text-400">{result.note}</p>
+      </div>
+    );
+  }
+
   if (result.kind === "stats") {
     return (
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -160,7 +258,7 @@ function ChartPreview({ result }: { result: ChartResult }) {
 
   if (result.kind === "pie") {
     return (
-      <div className="h-64 w-full">
+      <div className="h-56 w-full sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={result.data} dataKey="value" nameKey="name" outerRadius={90} label>
@@ -176,8 +274,49 @@ function ChartPreview({ result }: { result: ChartResult }) {
     );
   }
 
+  if (result.kind === "map") {
+    const topAreas = [...result.areas].sort((a, b) => b.value - a.value).slice(0, 4);
+    const coverage = result.totalEmployees
+      ? Math.round((result.mappedEmployees / result.totalEmployees) * 100)
+      : 0;
+    const mapSvg = renderGeographyMapSvg(result, COLORS[0]);
+
+    return (
+      <div className="grid gap-4 rounded-[10px] border border-border-lighter bg-white p-3 md:grid-cols-[minmax(0,2fr)_minmax(190px,1fr)] md:p-4">
+        <div
+          className="min-w-0 [&_svg]:h-auto [&_svg]:w-full"
+          dangerouslySetInnerHTML={{ __html: mapSvg }}
+        />
+        <div className="rounded-[10px] bg-panel-tint p-4">
+          <p className="text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+            {result.level === "state"
+              ? "U.S. state view"
+              : `${result.focusStateName} county view`}
+          </p>
+          <p className="mt-1 text-2xl font-bold text-text-900">{coverage}% mapped</p>
+          <p className="text-xs text-text-600">
+            {result.mappedEmployees} of {result.totalEmployees} employees · {result.areas.length}{" "}
+            {result.level === "state" ? "states" : "counties"}
+          </p>
+          <p className="mt-4 text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+            Top locations
+          </p>
+          <div className="mt-2 space-y-2">
+            {topAreas.map((area) => (
+              <div key={area.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-text-600">{area.name}</span>
+                <span className="font-bold text-text-900">{area.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[10px] leading-4 text-text-400">{result.note}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-64 w-full">
+    <div className="h-56 w-full sm:h-64">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={result.data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#efeee9" />

@@ -42,7 +42,7 @@ export default async function PlanYearDetailPage({
     <div>
       <Link
         href={`/clients/${clientId}`}
-        className="text-[13px] text-text-600 hover:text-text-900"
+        className="block max-w-full truncate text-[13px] text-text-600 hover:text-text-900"
       >
         &larr; {planYear.client.name}
       </Link>
@@ -96,7 +96,7 @@ export default async function PlanYearDetailPage({
               {planYear.decks.map((deck) => (
                 <li
                   key={deck.id}
-                  className="flex items-center justify-between px-5 py-4 text-sm"
+                  className="flex flex-col items-start gap-2 px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5"
                 >
                   <span className="text-text-900">
                     {deck.generatedAt.toLocaleString()}

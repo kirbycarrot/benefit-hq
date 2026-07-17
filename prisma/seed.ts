@@ -6,6 +6,15 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 const CHART_DEFINITIONS = [
+  // Overview
+  {
+    key: "executive-summary",
+    label: "Executive Summary",
+    description: "Opening slide with core workforce metrics and automatically generated observations.",
+    category: "overview",
+    sortOrder: 1,
+  },
+
   // Demographics
   {
     key: "headcount-stat-tiles",
@@ -65,8 +74,8 @@ const CHART_DEFINITIONS = [
   },
   {
     key: "geographic-distribution",
-    label: "Geographic Distribution",
-    description: "Employee headcount by postal code (top 10).",
+    label: "Workforce Geography",
+    description: "Automatic state or county heat map based on employee ZIP codes, with a ZIP summary fallback.",
     category: "demographics",
     sortOrder: 90,
   },
@@ -94,6 +103,13 @@ const CHART_DEFINITIONS = [
 
   // Enrollment
   {
+    key: "benefits-participation-funnel",
+    label: "Benefits Participation & Waivers",
+    description: "Eligible, enrolled, waived, not-recorded, and participation totals for Medical, Dental, and Vision.",
+    category: "enrollment",
+    sortOrder: 190,
+  },
+  {
     key: "medical-tier-enrollment",
     label: "Medical Coverage Tier Enrollment",
     description: "Enrollment split across Employee / Employee + Spouse / Employee + Child(ren) / Family for medical.",
@@ -119,6 +135,7 @@ const CHART_DEFINITIONS = [
     label: "Dental & Vision Enrollment",
     description: "Enrollment and waiver counts for dental and vision coverage.",
     category: "enrollment",
+    defaultEnabled: false,
     sortOrder: 230,
   },
   {
@@ -133,6 +150,7 @@ const CHART_DEFINITIONS = [
     label: "Waived Coverage Summary",
     description: "Percentage of eligible employees waiving medical, dental, or vision coverage.",
     category: "enrollment",
+    defaultEnabled: false,
     sortOrder: 250,
   },
 

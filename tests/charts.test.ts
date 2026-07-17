@@ -54,6 +54,61 @@ function dataset(): ChartDataset {
   };
 }
 
+function datasetWithZips(zips: string[]): ChartDataset {
+  const base = dataset();
+  return {
+    ...base,
+    employees: zips.map((postalCode, index) => ({
+      ...base.employees[0],
+      id: `employee-${index}`,
+      employeeNumber: `E-${index + 1}`,
+      postalCode,
+      elections: base.employees[0].elections.map((election) => ({
+        ...election,
+        id: `election-${index}`,
+        employeeId: `employee-${index}`,
+      })),
+    })),
+  };
+}
+
+function participationDataset(): ChartDataset {
+  const base = dataset();
+  const electionSets: [string, string][][] = [
+    [
+      ["Medical", "Employee"],
+      ["Dental", "Employee"],
+      ["Vision", "Waive"],
+    ],
+    [
+      ["Medical", "Waive"],
+      ["Dental", "Employee"],
+    ],
+    [
+      ["Medical", "Employee + Spouse"],
+      ["Dental", "Waive"],
+      ["Vision", "Employee"],
+    ],
+    [],
+  ];
+
+  return {
+    ...base,
+    employees: electionSets.map((elections, employeeIndex) => ({
+      ...base.employees[0],
+      id: `employee-${employeeIndex}`,
+      employeeNumber: `E-${employeeIndex + 1}`,
+      elections: elections.map(([benefitType, optionName], electionIndex) => ({
+        ...base.employees[0].elections[0],
+        id: `election-${employeeIndex}-${electionIndex}`,
+        employeeId: `employee-${employeeIndex}`,
+        benefitType,
+        optionName,
+      })),
+    })),
+  };
+}
+
 test("premium chart output carries the rate period and enforced total", () => {
   const result = CHART_COMPUTE["premium-summary-table"](dataset());
   assert.equal(result.kind, "table");
@@ -73,4 +128,111 @@ test("headcount calculations include medical participation", () => {
     label: "Medical participation",
     value: "100.0%",
   });
+});
+
+test("executive summary combines workforce metrics with data-derived observations", () => {
+  const result = CHART_COMPUTE["executive-summary"](
+    datasetWithZips(["80202", "80301", "10001", "90210"])
+  );
+
+  assert.equal(result.kind, "executive");
+  if (result.kind !== "executive") return;
+  assert.deepEqual(
+    result.metrics.map((metric) => [metric.label, metric.value]),
+    [
+      ["Total employees", "4"],
+      ["Average age", "40.0"],
+      ["Average tenure", "5.0 yrs"],
+      ["Geographic footprint", "3 states"],
+      ["Medical participation", "100.0%"],
+    ]
+  );
+  assert.equal(result.observations.length, 3);
+  assert.match(result.observations[0], /Employees span 3 states/);
+  assert.match(result.observations[1], /largest age group/);
+  assert.match(result.observations[2], /largest tenure group/);
+});
+
+test("benefits participation reconciles enrolled, waived, and unreported employees", () => {
+  const result = CHART_COMPUTE["benefits-participation-funnel"](
+    participationDataset()
+  );
+
+  assert.equal(result.kind, "participation");
+  if (result.kind !== "participation") return;
+  assert.deepEqual(result.benefits, [
+    {
+      name: "Medical",
+      eligible: 4,
+      enrolled: 2,
+      waived: 1,
+      unreported: 1,
+      participation: 50,
+    },
+    {
+      name: "Dental",
+      eligible: 4,
+      enrolled: 2,
+      waived: 1,
+      unreported: 1,
+      participation: 50,
+    },
+    {
+      name: "Vision",
+      eligible: 4,
+      enrolled: 1,
+      waived: 1,
+      unreported: 2,
+      participation: 25,
+    },
+  ]);
+  for (const benefit of result.benefits) {
+    assert.equal(
+      benefit.enrolled + benefit.waived + benefit.unreported,
+      benefit.eligible
+    );
+  }
+});
+
+test("workforce geography uses a state map when employees span states", () => {
+  const result = CHART_COMPUTE["geographic-distribution"](
+    datasetWithZips(["80202", "80301", "10001", "90210"])
+  );
+
+  assert.equal(result.kind, "map");
+  if (result.kind !== "map") return;
+  assert.equal(result.level, "state");
+  assert.equal(result.mappedEmployees, 4);
+  assert.deepEqual(
+    result.areas.map((area) => area.name).sort(),
+    ["California", "Colorado", "New York"]
+  );
+});
+
+test("workforce geography drills into counties for a single state", () => {
+  const result = CHART_COMPUTE["geographic-distribution"](
+    datasetWithZips(["80202", "80202", "80301"])
+  );
+
+  assert.equal(result.kind, "map");
+  if (result.kind !== "map") return;
+  assert.equal(result.level, "county");
+  assert.equal(result.focusStateName, "Colorado");
+  assert.deepEqual(
+    result.areas.map((area) => [area.name, area.value]).sort(),
+    [
+      ["Boulder", 1],
+      ["Denver", 2],
+    ]
+  );
+});
+
+test("workforce geography keeps the ZIP table when a map would add no detail", () => {
+  const result = CHART_COMPUTE["geographic-distribution"](
+    datasetWithZips(["80202", "80203"])
+  );
+
+  assert.equal(result.kind, "table");
+  if (result.kind !== "table") return;
+  assert.equal(result.title, "Workforce Geography (Top ZIP Codes)");
 });

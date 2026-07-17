@@ -90,7 +90,7 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
 
       <div>
         <label className="mb-1.5 block text-xs font-semibold text-text-600">Logo</label>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           {logoPreview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -99,7 +99,7 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
               className="h-16 w-16 rounded-[10px] border border-border-light object-contain p-1"
             />
           )}
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <label
               htmlFor={logoInputId}
               className="shrink-0 cursor-pointer rounded-full border border-input-border bg-white px-4 py-2.5 text-[13px] font-semibold text-text-900 hover:border-text-300"

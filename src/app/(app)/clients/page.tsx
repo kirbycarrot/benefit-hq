@@ -28,11 +28,11 @@ export default async function ClientsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <h1 className="text-[26px] font-extrabold text-text-900">Clients</h1>
         <Link
           href="/clients/new"
-          className="rounded-full bg-ink-900 px-5 py-3 text-[13px] font-semibold text-white hover:bg-black"
+          className="shrink-0 rounded-full bg-ink-900 px-5 py-3 text-[13px] font-semibold text-white hover:bg-black"
         >
           New client
         </Link>
