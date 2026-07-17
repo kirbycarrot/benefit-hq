@@ -1,0 +1,84 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export function NewPlanYearForm({ clientId }: { clientId: string }) {
+  const router = useRouter();
+  const [label, setLabel] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const res = await fetch(`/api/clients/${clientId}/plan-years`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, effectiveDate }),
+    });
+
+    setLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? "Something went wrong");
+      return;
+    }
+
+    const data = await res.json();
+    router.push(`/clients/${clientId}/plan-years/${data.id}`);
+    router.refresh();
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+      >
+        New plan year
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-700">Label</label>
+        <input
+          type="text"
+          required
+          placeholder="2026 Plan Year"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700">
+          Effective date
+        </label>
+        <input
+          type="date"
+          required
+          value={effectiveDate}
+          onChange={(e) => setEffectiveDate(e.target.value)}
+          className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+      >
+        {loading ? "Creating..." : "Create"}
+      </button>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </form>
+  );
+}

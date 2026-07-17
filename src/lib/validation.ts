@@ -1,0 +1,36 @@
+import { z } from "zod";
+
+export const hexColor = z
+  .string()
+  .regex(/^#[0-9A-Fa-f]{6}$/, "Must be a hex color like #1F2937");
+
+export const clientSchema = z.object({
+  name: z.string().min(1, "Client name is required").max(200),
+  primaryColor: hexColor,
+  secondaryColor: hexColor,
+});
+
+export const planYearSchema = z.object({
+  label: z.string().min(1, "Label is required").max(100),
+  effectiveDate: z.coerce.date({ message: "Enter a valid date" }),
+});
+
+export const COVERAGE_TYPES = [
+  "Medical",
+  "Dental",
+  "Vision",
+  "Life",
+  "STD",
+  "LTD",
+] as const;
+
+export const TIERS = ["EE", "EE+Spouse", "EE+Child", "Family"] as const;
+
+export const policyLineSchema = z.object({
+  coverageType: z.enum(COVERAGE_TYPES),
+  planName: z.string().min(1, "Plan name is required").max(200),
+  tier: z.enum(TIERS),
+  employeeCost: z.coerce.number().min(0),
+  employerCost: z.coerce.number().min(0),
+  totalPremium: z.coerce.number().min(0),
+});

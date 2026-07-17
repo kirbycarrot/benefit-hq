@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  clients Client[]
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  logoPath       String?
+  primaryColor   String   @default("#1F2937")
+  secondaryColor String   @default("#14B8A6")
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  planYears PlanYear[]
+}
+
+model PlanYear {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  label         String
+  effectiveDate DateTime
+  createdAt     DateTime @default(now())
+
+  policyLines    PolicyLine[]
+  censusUploads  CensusUpload[]
+  employees      Employee[]
+  deckConfig     DeckConfig?
+  decks          Deck[]
+
+  @@unique([clientId, label])
+}
+
+model PolicyLine {
+  id            String   @id @default(cuid())
+  planYearId    String
+  planYear      PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  coverageType  String // Medical | Dental | Vision | Life | STD | LTD
+  planName      String
+  tier          String // EE | EE+Spouse | EE+Child | Family
+  employeeCost  Decimal  @db.Decimal(10, 2)
+  employerCost  Decimal  @db.Decimal(10, 2)
+  totalPremium  Decimal  @db.Decimal(10, 2)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
+model CensusUpload {
+  id         String   @id @default(cuid())
+  planYearId String
+  planYear   PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  filenames  Json // string[] of original filenames uploaded together
+  status     String // processing | committed | failed
+  warnings   Json // string[] of validation warnings surfaced to the user
+  summary    Json? // headcount, dependent count, election count, etc.
+  uploadedAt DateTime @default(now())
+}
+
+model Employee {
+  id               String    @id @default(cuid())
+  planYearId       String
+  planYear         PlanYear  @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  employeeNumber   String
+  firstName        String
+  lastName         String
+  birthDate        DateTime?
+  gender           String?
+  hireDate         DateTime?
+  employmentStatus String?
+  baseSalary       Decimal?  @db.Decimal(12, 2)
+  postalCode       String?
+
+  dependents Dependent[]
+  elections  BenefitElection[]
+
+  @@unique([planYearId, employeeNumber])
+}
+
+model Dependent {
+  id               String    @id @default(cuid())
+  employeeId       String
+  employee         Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  firstName        String?
+  lastName         String?
+  birthDate        DateTime?
+  gender           String?
+  relationshipType String? // Spouse | Child | ...
+}
+
+model BenefitElection {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  benefitType String // Medical | Dental | Vision | Life | STD | LTD | VoluntaryLife | VoluntaryAD&D
+  planName    String?
+  optionName  String?
+  volume      Decimal? @db.Decimal(12, 2) // for Life/STD/LTD elections
+}
+
+model ChartDefinition {
+  id             String  @id @default(cuid())
+  key            String  @unique
+  label          String
+  description    String
+  category       String // demographics | enrollment | cost | ancillary
+  defaultEnabled Boolean @default(true)
+  sortOrder      Int     @default(0)
+}
+
+model DeckConfig {
+  id         String   @id @default(cuid())
+  planYearId String   @unique
+  planYear   PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  selections Json // { [chartKey]: { enabled: boolean, params?: Record<string, unknown> } }
+  updatedAt  DateTime @updatedAt
+}
+
+model Deck {
+  id          String    @id @default(cuid())
+  planYearId  String
+  planYear    PlanYear  @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  filePath    String?
+  status      String // generating | ready | failed
+  generatedAt DateTime  @default(now())
+}
