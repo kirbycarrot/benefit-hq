@@ -75,10 +75,11 @@ The script refuses a dirty working tree, pulls with `--ff-only`, runs `npm ci`, 
 If the systemd unit has another name:
 
 ```sh
-./scripts/deploy-release.sh --service your-service-name.service
+systemctl list-unit-files --type=service | grep -i benefit
+./scripts/deploy-release.sh --service the-real-unit-name.service
 ```
 
-For a user-level systemd unit, add `--user-service`. Use `--no-restart` when another supervisor handles startup, or `--health-url` when the local health-check address differs. Run `./scripts/deploy-release.sh --help` for every option.
+Replace `the-real-unit-name.service` with a unit name returned by the first command; do not use it literally. If the service is named `benefit-hq.service`, omit `--service` entirely. For a user-level systemd unit, add `--user-service`. Use `--no-restart` when another supervisor handles startup, or `--health-url` when the local health-check address differs. Run `./scripts/deploy-release.sh --help` for every option. The script verifies that the selected unit exists before installing dependencies or changing the database.
 
 Database migrations are forward-only. The script deliberately stops before migration if verification or the production build fails, but it does not attempt to reverse a migration after one has been applied.
 

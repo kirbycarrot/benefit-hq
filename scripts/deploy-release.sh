@@ -101,6 +101,35 @@ for required_command in git npm npx node; do
   command -v "$required_command" >/dev/null 2>&1 || fail "missing required command: $required_command"
 done
 
+if [[ $restart_service -eq 1 ]]; then
+  case "$service_name" in
+    your-service.service|your-service-name.service)
+      fail "--service must be the real systemd unit name, not the documentation placeholder; omit --service to use benefit-hq.service"
+      ;;
+  esac
+
+  command -v systemctl >/dev/null 2>&1 || fail "systemctl is unavailable; use --no-restart if another supervisor starts the app"
+
+  if [[ $user_service -eq 1 ]]; then
+    systemctl_command=(systemctl --user)
+  elif [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    systemctl_command=(systemctl)
+  else
+    command -v sudo >/dev/null 2>&1 || fail "sudo is required to restart the system service"
+    systemctl_command=(sudo systemctl)
+  fi
+
+  service_load_state="$(
+    "${systemctl_command[@]}" show "$service_name" --property=LoadState --value 2>/dev/null || true
+  )"
+  if [[ -z "$service_load_state" || "$service_load_state" == "not-found" ]]; then
+    if [[ $user_service -eq 1 ]]; then
+      fail "systemd unit $service_name was not found; check available names with: systemctl --user list-unit-files --type=service"
+    fi
+    fail "systemd unit $service_name was not found; check available names with: systemctl list-unit-files --type=service"
+  fi
+fi
+
 cd "$repo_root"
 
 [[ -f package-lock.json ]] || fail "package-lock.json is missing"
@@ -146,17 +175,6 @@ run_step "Seeding chart definitions" npm run db:seed
 run_step "Removing development-only packages" npm prune --omit=dev
 
 if [[ $restart_service -eq 1 ]]; then
-  command -v systemctl >/dev/null 2>&1 || fail "systemctl is unavailable; use --no-restart if another supervisor starts the app"
-
-  if [[ $user_service -eq 1 ]]; then
-    systemctl_command=(systemctl --user)
-  elif [[ ${EUID:-$(id -u)} -eq 0 ]]; then
-    systemctl_command=(systemctl)
-  else
-    command -v sudo >/dev/null 2>&1 || fail "sudo is required to restart the system service"
-    systemctl_command=(sudo systemctl)
-  fi
-
   restart_attempted=1
   run_step "Restarting $service_name" "${systemctl_command[@]}" restart "$service_name"
   run_step "Confirming $service_name is active" "${systemctl_command[@]}" is-active --quiet "$service_name"
