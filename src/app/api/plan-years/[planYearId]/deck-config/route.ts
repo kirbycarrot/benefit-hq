@@ -12,6 +12,20 @@ export async function PUT(
   }
 
   const { planYearId } = await params;
+  const planYear = await prisma.planYear.findUnique({
+    where: { id: planYearId },
+    include: { client: { select: { archivedAt: true } } },
+  });
+  if (!planYear) {
+    return NextResponse.json({ error: "Plan year not found" }, { status: 404 });
+  }
+  if (planYear.client.archivedAt) {
+    return NextResponse.json(
+      { error: "Restore this client before changing deck settings" },
+      { status: 409 }
+    );
+  }
+
   const body = await request.json();
 
   if (typeof body?.selections !== "object" || body.selections === null) {

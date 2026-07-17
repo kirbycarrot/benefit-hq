@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { deleteStoredFile, saveLogo, storedLogoPathFromUrl } from "@/lib/storage";
+import {
+  deleteLogoForUrl,
+  deleteStoredFile,
+  saveLogo,
+  storedLogoPathFromUrl,
+} from "@/lib/storage";
 import { detectLogoType } from "@/lib/uploads";
 import { clientSchema } from "@/lib/validation";
+import { clientDeletionNameMatches } from "@/lib/clients";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 export async function PATCH(
@@ -19,6 +25,12 @@ export async function PATCH(
   const existing = await prisma.client.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+  if (existing.archivedAt) {
+    return NextResponse.json(
+      { error: "Restore this client before editing its details" },
+      { status: 409 }
+    );
   }
 
   const formData = await request.formData();
@@ -70,9 +82,62 @@ export async function PATCH(
   }
 
   if (logoPath) {
-    const previousLogo = storedLogoPathFromUrl(existing.logoPath);
-    if (previousLogo) await deleteStoredFile(previousLogo);
+    await deleteLogoForUrl(existing.logoPath);
   }
 
   return NextResponse.json({ id: client.id });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const client = await prisma.client.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      logoPath: true,
+      planYears: { select: { decks: { select: { filePath: true } } } },
+    },
+  });
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
+  let confirmationName: unknown;
+  try {
+    confirmationName = (await request.json())?.confirmationName;
+  } catch {
+    return NextResponse.json({ error: "Client name confirmation is required" }, { status: 400 });
+  }
+
+  if (!clientDeletionNameMatches(confirmationName, client.name)) {
+    return NextResponse.json(
+      { error: `Type ${client.name} to confirm permanent deletion` },
+      { status: 400 }
+    );
+  }
+
+  const deckPaths = client.planYears.flatMap((planYear) =>
+    planYear.decks.flatMap((deck) => (deck.filePath ? [deck.filePath] : []))
+  );
+
+  await prisma.client.delete({ where: { id: client.id } });
+
+  const cleanupResults = await Promise.allSettled([
+    deleteLogoForUrl(client.logoPath),
+    ...deckPaths.map((filePath) => deleteStoredFile(filePath)),
+  ]);
+  if (cleanupResults.some((result) => result.status === "rejected")) {
+    console.error("One or more stored assets could not be removed for a deleted client");
+  }
+
+  return NextResponse.json({ ok: true });
 }

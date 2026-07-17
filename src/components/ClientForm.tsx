@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type ClientFormProps = {
@@ -16,6 +16,7 @@ type ClientFormProps = {
 
 export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
   const router = useRouter();
+  const logoInputId = useId();
   const [name, setName] = useState(initial?.name ?? "");
   const [primaryColor, setPrimaryColor] = useState(initial?.primaryColor ?? "#1F2937");
   const [secondaryColor, setSecondaryColor] = useState(
@@ -25,6 +26,12 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -86,12 +93,24 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
               className="h-16 w-16 rounded-[10px] border border-border-light object-contain p-1"
             />
           )}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleLogoChange}
-            className="text-[13px] text-text-600"
-          />
+          <div className="flex min-w-0 items-center gap-3">
+            <label
+              htmlFor={logoInputId}
+              className="shrink-0 cursor-pointer rounded-full border border-input-border bg-white px-4 py-2.5 text-[13px] font-semibold text-text-900 hover:border-text-300"
+            >
+              Choose file
+            </label>
+            <span className="truncate text-[13px] text-text-600">
+              {logoFile?.name ?? (initial?.logoPath ? "Current logo" : "No file selected")}
+            </span>
+            <input
+              id={logoInputId}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleLogoChange}
+              className="sr-only"
+            />
+          </div>
         </div>
       </div>
 

@@ -26,6 +26,13 @@ export const COVERAGE_TYPES = [
 
 export const TIERS = ["EE", "EE+Spouse", "EE+Child", "Family"] as const;
 
+export const TIER_LABELS: Record<(typeof TIERS)[number], string> = {
+  EE: "Employee",
+  "EE+Spouse": "EE+Spouse",
+  "EE+Child": "EE+Child",
+  Family: "Family",
+};
+
 export const RATE_PERIODS = ["monthly", "per-pay-period", "annual"] as const;
 
 export const RATE_PERIOD_LABELS: Record<(typeof RATE_PERIODS)[number], string> = {

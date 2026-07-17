@@ -73,7 +73,7 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
           disabled={!file || loading}
           className="rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
         >
-          {loading ? "Processing..." : "Upload & normalize"}
+          {loading ? "Processing..." : "Upload census"}
         </button>
       </div>
 

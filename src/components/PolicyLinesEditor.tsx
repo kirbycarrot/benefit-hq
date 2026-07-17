@@ -6,6 +6,7 @@ import {
   COVERAGE_TYPES,
   RATE_PERIOD_LABELS,
   RATE_PERIODS,
+  TIER_LABELS,
   TIERS,
   addCurrencyAmounts,
 } from "@/lib/validation";
@@ -22,7 +23,7 @@ type PolicyLine = {
 };
 
 const inputClass =
-  "rounded-[10px] border border-input-border bg-white px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none";
+  "h-11 rounded-[10px] border border-input-border bg-white px-3 text-[13px] focus:border-teal-deep focus:outline-none";
 const labelClass = "mb-1.5 block text-xs font-semibold text-text-900";
 
 export function PolicyLinesEditor({
@@ -117,7 +118,9 @@ export function PolicyLinesEditor({
                 <tr key={line.id} className="border-t border-border-lighter">
                   <td className="px-5 py-3 text-text-900">{line.coverageType}</td>
                   <td className="px-5 py-3 text-text-900">{line.planName}</td>
-                  <td className="px-5 py-3 text-text-900">{line.tier}</td>
+                  <td className="px-5 py-3 text-text-900">
+                    {TIER_LABELS[line.tier as keyof typeof TIER_LABELS] ?? line.tier}
+                  </td>
                   <td className="px-5 py-3 text-right text-text-900">
                     ${line.employeeCost}
                   </td>
@@ -155,7 +158,7 @@ export function PolicyLinesEditor({
           <select
             value={coverageType}
             onChange={(e) => setCoverageType(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} w-[140px]`}
           >
             {COVERAGE_TYPES.map((c) => (
               <option key={c} value={c}>
@@ -179,11 +182,11 @@ export function PolicyLinesEditor({
           <select
             value={tier}
             onChange={(e) => setTier(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} w-[170px]`}
           >
             {TIERS.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {TIER_LABELS[t]}
               </option>
             ))}
           </select>
@@ -232,7 +235,7 @@ export function PolicyLinesEditor({
             value={ratePeriod}
             onChange={(e) => setRatePeriod(e.target.value)}
             disabled={initialPolicyLines.length > 0}
-            className={inputClass}
+            className={`${inputClass} w-[150px]`}
           >
             {RATE_PERIODS.map((period) => (
               <option key={period} value={period}>
@@ -244,7 +247,7 @@ export function PolicyLinesEditor({
         <button
           type="submit"
           disabled={loading}
-          className="rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
+          className="h-11 rounded-full bg-ink-900 px-5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
         >
           {loading ? "Adding..." : "Add line"}
         </button>

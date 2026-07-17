@@ -21,6 +21,12 @@ export async function POST(
   if (!planYear) {
     return NextResponse.json({ error: "Plan year not found" }, { status: 404 });
   }
+  if (planYear.client.archivedAt) {
+    return NextResponse.json(
+      { error: "Restore this client before generating a deck" },
+      { status: 409 }
+    );
+  }
   if (planYear._count.employees === 0) {
     return NextResponse.json(
       { error: "Upload a census before generating a deck" },

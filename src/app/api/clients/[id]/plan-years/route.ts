@@ -17,6 +17,12 @@ export async function POST(
   if (!client) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
+  if (client.archivedAt) {
+    return NextResponse.json(
+      { error: "Restore this client before adding a plan year" },
+      { status: 409 }
+    );
+  }
 
   const body = await request.json();
   const parsed = planYearSchema.safeParse(body);

@@ -5,6 +5,12 @@ import path from "path";
 const PRIVATE_STORAGE_DIR = process.env.STORAGE_DIR
   ? path.resolve(/* turbopackIgnore: true */ process.env.STORAGE_DIR)
   : path.join(/* turbopackIgnore: true */ process.cwd(), "storage");
+const LEGACY_LOGO_DIR = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  "public",
+  "uploads",
+  "logos"
+);
 export type PrivateBucket = "decks" | "logos";
 
 function safeFilename(filename: string): string {
@@ -61,4 +67,33 @@ export function storedLogoPathFromUrl(logoUrl: string | null | undefined): strin
   const filename = logoUrl.slice(prefix.length);
   if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
   return path.join("logos", filename);
+}
+
+export function legacyLogoFilenameFromUrl(
+  logoUrl: string | null | undefined
+): string | null {
+  const prefix = "/uploads/logos/";
+  if (!logoUrl?.startsWith(prefix)) return null;
+  const filename = logoUrl.slice(prefix.length);
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
+  return filename;
+}
+
+export async function deleteLogoForUrl(
+  logoUrl: string | null | undefined
+): Promise<void> {
+  const storedLogo = storedLogoPathFromUrl(logoUrl);
+  if (storedLogo) {
+    await deleteStoredFile(storedLogo);
+    return;
+  }
+
+  const legacyFilename = legacyLogoFilenameFromUrl(logoUrl);
+  if (legacyFilename) {
+    await unlink(path.join(LEGACY_LOGO_DIR, legacyFilename)).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      }
+    );
+  }
 }

@@ -1,7 +1,7 @@
 import type { ChartDataset } from "./dataset";
 import { ageInYears, tenureInYears } from "./dataset";
 import type { ChartResult } from "./types";
-import { RATE_PERIOD_LABELS } from "@/lib/validation";
+import { RATE_PERIOD_LABELS, TIER_LABELS } from "@/lib/validation";
 
 type Employee = ChartDataset["employees"][number];
 type Election = Employee["elections"][number];
@@ -296,7 +296,7 @@ function computePremiumSummaryTable(ds: ChartDataset): ChartResult {
   const rows = ds.policyLines.map((line) => [
     line.coverageType,
     line.planName,
-    line.tier,
+    TIER_LABELS[line.tier as keyof typeof TIER_LABELS] ?? line.tier,
     `$${Number(line.employeeCost).toFixed(2)}`,
     `$${Number(line.employerCost).toFixed(2)}`,
     `$${Number(line.totalPremium).toFixed(2)}`,

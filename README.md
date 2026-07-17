@@ -104,6 +104,12 @@ total premium = employee cost + employer cost
 
 The rate period is included in premium tables and aggregate chart titles so unlike units are not presented as comparable totals.
 
+## Client lifecycle
+
+Administrators can archive a client from the collapsed **Edit client details** area. Archived clients are hidden from the active list and shown to administrators in a separate recoverable list. Archived clients are read-only until restored.
+
+Permanent deletion is also restricted to administrators and requires typing the exact client name. It cascades through plan years, census data, policy lines, chart settings, and deck records, then removes the client's managed logo and generated PowerPoint files from storage. Permanent deletion cannot be undone; use archive for normal offboarding and delete only when retention policy permits it.
+
 ## Quality checks
 
 ```sh
