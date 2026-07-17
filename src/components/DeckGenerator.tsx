@@ -25,27 +25,27 @@ export function DeckGenerator({ planYearId }: { planYearId: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">Generate deck</h2>
-      <p className="mt-1 text-sm text-gray-500">
+    <div className="rounded-[14px] border border-border-light bg-white p-[26px] shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
+      <h2 className="mb-1 text-[17px] font-bold text-text-900">Generate deck</h2>
+      <p className="mb-[18px] text-[13px] text-text-600">
         Builds a branded PowerPoint from the selections above.
       </p>
       <button
         onClick={handleGenerate}
         disabled={loading}
-        className="mt-4 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-full bg-ink-900 px-[22px] py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
       >
         {loading ? "Generating..." : "Generate deck"}
       </button>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       {deckId && (
-        <p className="mt-3 text-sm text-green-700">
+        <p className="mt-4 text-[13px] text-success">
           Deck ready.{" "}
           <a
             href={`/api/decks/${deckId}/download`}
-            className="font-medium underline hover:no-underline"
+            className="font-semibold text-success underline hover:no-underline"
           >
             Download PowerPoint
           </a>

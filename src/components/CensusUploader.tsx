@@ -49,42 +49,52 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-end gap-3">
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-[14px] border border-border-light bg-white p-[26px] shadow-[0_1px_2px_rgba(20,24,26,0.04)]"
+    >
+      <div className="mb-[22px] flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-medium text-gray-700">
+          <label className="mb-1.5 block text-xs font-semibold text-text-900">
             Census workbook (.xlsx)
           </label>
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="mt-1 text-sm text-gray-600"
-          />
+          <label className="flex cursor-pointer items-center rounded-[10px] border border-dashed border-text-300 px-4 py-2.5 text-[13px] text-text-400">
+            {file ? file.name : "Choose file — no file chosen"}
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+          </label>
         </div>
         <button
           type="submit"
           disabled={!file || loading}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
         >
           {loading ? "Processing..." : "Upload & normalize"}
         </button>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
       {summary && (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Stat label="Employees" value={summary.employeeCount} />
           <Stat label="Dependents" value={summary.dependentCount} />
           <Stat label="Elections" value={summary.electionCount} />
           <Stat label="Ancillary matched" value={summary.matchedAncillaryCount} />
-          <Stat label="Ancillary unmatched" value={summary.unmatchedAncillaryCount} />
+          <Stat
+            label="Ancillary unmatched"
+            value={summary.unmatchedAncillaryCount}
+            warn
+          />
         </div>
       )}
 
       {warnings.length > 0 && (
-        <ul className="mt-4 list-inside list-disc space-y-1 text-sm text-amber-700">
+        <ul className="mt-[18px] list-inside list-disc space-y-1 text-[13px] text-amber">
           {warnings.map((w, i) => (
             <li key={i}>{w}</li>
           ))}
@@ -94,11 +104,13 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
-    <div className="rounded-md bg-gray-50 px-3 py-2">
-      <p className="text-lg font-semibold text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500">{label}</p>
+    <div className="rounded-[10px] bg-panel-tint p-3.5">
+      <p className={`text-xl font-extrabold ${warn ? "text-amber" : "text-text-900"}`}>
+        {value}
+      </p>
+      <p className="text-xs text-text-600">{label}</p>
     </div>
   );
 }

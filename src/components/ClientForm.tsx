@@ -61,65 +61,71 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700">Company name</label>
+        <label className="mb-1.5 block text-xs font-semibold text-text-600">
+          Company name
+        </label>
         <input
           type="text"
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="w-full rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Logo</label>
-        <div className="mt-1 flex items-center gap-4">
+        <label className="mb-1.5 block text-xs font-semibold text-text-600">Logo</label>
+        <div className="flex items-center gap-4">
           {logoPreview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoPreview}
               alt="Logo preview"
-              className="h-16 w-16 rounded border border-gray-200 object-contain p-1"
+              className="h-16 w-16 rounded-[10px] border border-border-light object-contain p-1"
             />
           )}
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp,image/svg+xml"
             onChange={handleLogoChange}
-            className="text-sm text-gray-600"
+            className="text-[13px] text-text-600"
           />
         </div>
       </div>
 
       <div className="flex gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Primary color</label>
+          <label className="mb-1.5 block text-xs font-semibold text-text-600">
+            Primary color
+          </label>
           <input
             type="color"
             value={primaryColor}
             onChange={(e) => setPrimaryColor(e.target.value)}
-            className="mt-1 h-10 w-16 rounded border border-gray-300"
+            className="h-8 w-11 rounded-[8px] border border-input-border"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Secondary color</label>
+          <label className="mb-1.5 block text-xs font-semibold text-text-600">
+            Secondary color
+          </label>
           <input
             type="color"
             value={secondaryColor}
             onChange={(e) => setSecondaryColor(e.target.value)}
-            className="mt-1 h-10 w-16 rounded border border-gray-300"
+            className="h-8 w-11 rounded-[8px] border border-input-border"
           />
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50"
       >
         {loading ? "Saving..." : mode === "create" ? "Create client" : "Save changes"}
       </button>

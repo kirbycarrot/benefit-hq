@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f4f1;
+  --foreground: #14181a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-sans: var(--font-inter);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Benefit HQ design tokens */
+  --color-ink-900: #0e1613;
+  --color-ink-800: #16221e;
+  --color-ink-700: #223330;
+  --color-ink-700-alt: #2e4440;
+  --color-sidebar-active: #1b2a26;
+  --color-teal-bright: #2fe0d2;
+  --color-teal-deep: #0f9c90;
+  --color-teal-deep-hover: #0c7a70;
+  --color-navy: #1b3a5c;
+  --color-bg-light: #f5f4f1;
+  --color-panel-tint: #faf9f6;
+  --color-border-light: #e6e4de;
+  --color-border-lighter: #efeee9;
+  --color-input-border: #dad8d2;
+  --color-text-900: #14181a;
+  --color-text-600: #6b7270;
+  --color-text-500: #7c8985;
+  --color-text-400: #9a9f9c;
+  --color-text-300: #a8a49b;
+  --color-warm-hero-mid: #b9c4c1;
+  --color-warm-hero-teal: #9baaa6;
+  --color-amber: #b45309;
+  --color-success: #15803d;
+  --color-destructive: #dc2626;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

@@ -48,22 +48,24 @@ export default async function ChartsPage({
     <div>
       <Link
         href={`/clients/${clientId}/plan-years/${planYearId}`}
-        className="text-sm text-gray-500 hover:text-gray-700"
+        className="text-[13px] text-text-600 hover:text-text-900"
       >
         &larr; {planYear.label}
       </Link>
-      <h1 className="mt-1 text-2xl font-semibold text-gray-900">Charts &amp; tables</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="mt-1 mb-1.5 text-[26px] font-extrabold text-text-900">
+        Charts &amp; tables
+      </h1>
+      <p className="mb-[22px] max-w-[560px] text-sm text-text-600">
         Choose which standard charts and tables to include in the generated deck.
       </p>
 
       {planYear._count.employees === 0 ? (
-        <p className="mt-6 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="rounded-[10px] bg-panel-tint px-4 py-3 text-sm text-amber">
           Upload a census for this plan year first — chart previews need employee data to
           render.
         </p>
       ) : (
-        <div className="mt-6">
+        <div>
           <ChartSelectionScreen
             planYearId={planYearId}
             chartDefinitions={chartDefinitions}

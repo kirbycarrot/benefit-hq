@@ -14,6 +14,10 @@ type PolicyLine = {
   totalPremium: string;
 };
 
+const inputClass =
+  "w-full rounded-[10px] border border-input-border bg-white px-3 py-2.5 text-sm focus:border-teal-deep focus:outline-none";
+const labelClass = "mb-1.5 block text-xs font-semibold text-text-900";
+
 export function PolicyLinesEditor({
   planYearId,
   initialPolicyLines,
@@ -72,149 +76,127 @@ export function PolicyLinesEditor({
   return (
     <div>
       {initialPolicyLines.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">
-                  Coverage
-                </th>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">Plan</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">Tier</th>
-                <th className="px-4 py-2 text-right font-medium text-gray-500">
-                  Employee cost
-                </th>
-                <th className="px-4 py-2 text-right font-medium text-gray-500">
-                  Employer cost
-                </th>
-                <th className="px-4 py-2 text-right font-medium text-gray-500">
-                  Total premium
-                </th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {initialPolicyLines.map((line) => (
-                <tr key={line.id}>
-                  <td className="px-4 py-2 text-gray-900">{line.coverageType}</td>
-                  <td className="px-4 py-2 text-gray-900">{line.planName}</td>
-                  <td className="px-4 py-2 text-gray-900">{line.tier}</td>
-                  <td className="px-4 py-2 text-right text-gray-900">
-                    ${line.employeeCost}
-                  </td>
-                  <td className="px-4 py-2 text-right text-gray-900">
-                    ${line.employerCost}
-                  </td>
-                  <td className="px-4 py-2 text-right text-gray-900">
-                    ${line.totalPremium}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      onClick={() => handleDelete(line.id)}
-                      className="text-xs font-medium text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mb-5 space-y-2.5">
+          {initialPolicyLines.map((line) => (
+            <div
+              key={line.id}
+              className="flex items-center justify-between rounded-xl border border-border-light px-[18px] py-4"
+            >
+              <div>
+                <div className="text-sm font-bold text-text-900">
+                  {line.planName}
+                  <span className="ml-2 rounded-full bg-panel-tint px-2 py-0.5 text-[11px] font-semibold text-text-600">
+                    {line.tier}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[13px] text-text-600">
+                  {line.coverageType} &middot; Employee ${line.employeeCost} / Employer $
+                  {line.employerCost} / Total ${line.totalPremium}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(line.id)}
+                className="text-xs font-semibold text-destructive hover:text-red-800"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
       <form
         onSubmit={handleAdd}
-        className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-gray-300 p-4"
+        className="rounded-xl bg-panel-tint p-5"
       >
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Coverage</label>
-          <select
-            value={coverageType}
-            onChange={(e) => setCoverageType(e.target.value)}
-            className="mt-1 rounded-md border border-gray-300 px-2 py-2 text-sm"
-          >
-            {COVERAGE_TYPES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+        <div className="mb-3.5 grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Coverage</label>
+            <select
+              value={coverageType}
+              onChange={(e) => setCoverageType(e.target.value)}
+              className={inputClass}
+            >
+              {COVERAGE_TYPES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Plan name</label>
+            <input
+              type="text"
+              required
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              className={inputClass}
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Plan name</label>
-          <input
-            type="text"
-            required
-            value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
-            className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
+        <div className="mb-4 grid grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Tier</label>
+            <select
+              value={tier}
+              onChange={(e) => setTier(e.target.value)}
+              className={inputClass}
+            >
+              {TIERS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Employee cost</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              value={employeeCost}
+              onChange={(e) => setEmployeeCost(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Employer cost</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              value={employerCost}
+              onChange={(e) => setEmployerCost(e.target.value)}
+              className={inputClass}
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Tier</label>
-          <select
-            value={tier}
-            onChange={(e) => setTier(e.target.value)}
-            className="mt-1 rounded-md border border-gray-300 px-2 py-2 text-sm"
-          >
-            {TIERS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">
-            Employee cost
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={employeeCost}
-            onChange={(e) => setEmployeeCost(e.target.value)}
-            className="mt-1 w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">
-            Employer cost
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={employerCost}
-            onChange={(e) => setEmployerCost(e.target.value)}
-            className="mt-1 w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">
-            Total premium
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            value={totalPremium}
-            onChange={(e) => setTotalPremium(e.target.value)}
-            className="mt-1 w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
+        <div className="mb-4 grid grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Total premium</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              value={totalPremium}
+              onChange={(e) => setTotalPremium(e.target.value)}
+              className={inputClass}
+            />
+          </div>
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          className="w-full rounded-full bg-ink-900 py-3.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
-          {loading ? "Adding..." : "Add line"}
+          {loading ? "Adding..." : "Add plan"}
         </button>
-        {error && <p className="w-full text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </form>
     </div>
   );

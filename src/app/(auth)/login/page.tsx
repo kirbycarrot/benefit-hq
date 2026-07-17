@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,41 +36,49 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Email</label>
+    <AuthShell
+      heading="From census data to a client-ready proposal."
+      description="Manage clients, plan years, and census data, then generate a branded benefits deck in minutes."
+      statusNote="Every client is tenant-isolated end to end."
+      cardEyebrow="Welcome back"
+      cardTitle="Sign in"
+    >
+      <form onSubmit={handleSubmit}>
+        <label className="mb-1.5 block text-[13px] font-semibold text-text-900">
+          Work email
+        </label>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="mb-[18px] w-full rounded-[10px] border border-input-border px-3.5 py-3 text-sm focus:border-teal-deep focus:outline-none"
         />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Password</label>
+        <label className="mb-1.5 block text-[13px] font-semibold text-text-900">
+          Password
+        </label>
         <input
           type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="mb-[22px] w-full rounded-[10px] border border-input-border px-3.5 py-3 text-sm focus:border-teal-deep focus:outline-none"
         />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-      >
-        {loading ? "Signing in..." : "Sign in"}
-      </button>
-      <p className="text-center text-sm text-gray-500">
-        No account?{" "}
-        <Link href="/register" className="font-medium text-gray-900 hover:underline">
-          Register
-        </Link>
-      </p>
-    </form>
+        {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-full bg-ink-900 py-[15px] text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+        >
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
+        <p className="mt-[18px] text-center text-[13px] text-text-600">
+          Need an account?{" "}
+          <Link href="/register" className="font-semibold text-teal-deep hover:text-teal-deep-hover">
+            Sign up
+          </Link>
+        </p>
+      </form>
+    </AuthShell>
   );
 }

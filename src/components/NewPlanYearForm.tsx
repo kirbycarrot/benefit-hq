@@ -39,7 +39,7 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+        className="rounded-full bg-ink-900 px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-black"
       >
         New plan year
       </button>
@@ -49,18 +49,18 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       <div>
-        <label className="block text-xs font-medium text-gray-700">Label</label>
+        <label className="mb-1.5 block text-xs font-semibold text-text-600">Label</label>
         <input
           type="text"
           required
           placeholder="2026 Plan Year"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none"
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-700">
+        <label className="mb-1.5 block text-xs font-semibold text-text-600">
           Effective date
         </label>
         <input
@@ -68,17 +68,17 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
           required
           value={effectiveDate}
           onChange={(e) => setEffectiveDate(e.target.value)}
-          className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none"
         />
       </div>
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-full bg-ink-900 px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50"
       >
         {loading ? "Creating..." : "Create"}
       </button>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </form>
   );
 }
