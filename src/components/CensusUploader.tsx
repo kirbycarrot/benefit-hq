@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { readJsonResponse } from "@/lib/api-response";
 
 type UploadSummary = {
   employeeCount: number;
@@ -9,6 +10,12 @@ type UploadSummary = {
   electionCount: number;
   matchedAncillaryCount: number;
   unmatchedAncillaryCount: number;
+};
+
+type UploadResponse = {
+  error?: string;
+  warnings?: string[];
+  summary?: UploadSummary;
 };
 
 export function CensusUploader({ planYearId }: { planYearId: string }) {
@@ -30,22 +37,32 @@ export function CensusUploader({ planYearId }: { planYearId: string }) {
     const formData = new FormData();
     formData.set("file", file);
 
-    const res = await fetch(`/api/plan-years/${planYearId}/census`, {
-      method: "POST",
-      body: formData,
-    });
-    const data = await res.json();
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/plan-years/${planYearId}/census`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await readJsonResponse<UploadResponse>(res);
 
-    if (!res.ok) {
-      setError(data.error ?? "Something went wrong");
-      if (data.warnings) setWarnings(data.warnings);
-      return;
+      if (!res.ok) {
+        setError(data?.error ?? "Unable to upload the census");
+        if (data?.warnings) setWarnings(data.warnings);
+        return;
+      }
+
+      if (!data?.summary) {
+        setError("The census was processed, but the server returned an unexpected response");
+        return;
+      }
+
+      setSummary(data.summary);
+      setWarnings(data.warnings ?? []);
+      router.refresh();
+    } catch {
+      setError("Unable to upload the census. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setSummary(data.summary);
-    setWarnings(data.warnings ?? []);
-    router.refresh();
   }
 
   return (

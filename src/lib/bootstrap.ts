@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import type { Prisma } from "@/generated/prisma/client";
+import { acquireAdvisoryTransactionLock } from "@/lib/advisory-lock";
 import { prisma } from "@/lib/prisma";
 
 type TransactionRunner = Pick<typeof prisma, "$transaction">;
@@ -21,7 +22,7 @@ async function createFirstAdmin(
   tx: Prisma.TransactionClient,
   input: { name: string; email: string; passwordHash: string }
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('benefit-hq-bootstrap-admin'))`;
+  await acquireAdvisoryTransactionLock(tx, "benefit-hq-bootstrap-admin");
   const userCount = await tx.user.count();
   if (userCount > 0) throw new BootstrapClosedError();
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { acquireAdvisoryTransactionLock } from "@/lib/advisory-lock";
 import type { CensusNormalizeResult } from "./normalize";
 
 export type CensusUploadMetadata = {
@@ -16,7 +17,7 @@ async function replaceCensus(
 ) {
   // PostgreSQL transaction-scoped advisory locks serialize replacements for a
   // plan year without exposing an empty or partially imported census.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${planYearId}, 0))`;
+  await acquireAdvisoryTransactionLock(tx, planYearId);
 
   // Dependents and elections are removed by their ON DELETE CASCADE foreign
   // keys. Keeping the replacement inside this transaction preserves the old

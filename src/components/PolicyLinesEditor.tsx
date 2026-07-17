@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { readApiError } from "@/lib/api-response";
 import {
   COVERAGE_TYPES,
   RATE_PERIOD_LABELS,
@@ -54,21 +55,26 @@ export function PolicyLinesEditor({
     if (initialPolicyLines.length === 0) return;
 
     setSavingRatePeriod(true);
-    const res = await fetch(`/api/plan-years/${planYearId}/policy-lines`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ratePeriod: nextRatePeriod }),
-    });
-    setSavingRatePeriod(false);
+    try {
+      const res = await fetch(`/api/plan-years/${planYearId}/policy-lines`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ratePeriod: nextRatePeriod }),
+      });
 
-    if (!res.ok) {
-      const data = await res.json();
+      if (!res.ok) {
+        setRatePeriod(previousRatePeriod);
+        setError(await readApiError(res, "Unable to update the rate period"));
+        return;
+      }
+
+      router.refresh();
+    } catch {
       setRatePeriod(previousRatePeriod);
-      setError(data.error ?? "Unable to update the rate period");
-      return;
+      setError("Unable to update the rate period. Please try again.");
+    } finally {
+      setSavingRatePeriod(false);
     }
-
-    router.refresh();
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -76,31 +82,34 @@ export function PolicyLinesEditor({
     setError(null);
     setLoading(true);
 
-    const res = await fetch(`/api/plan-years/${planYearId}/policy-lines`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        coverageType,
-        planName,
-        tier,
-        employeeCost,
-        employerCost,
-        ratePeriod,
-      }),
-    });
+    try {
+      const res = await fetch(`/api/plan-years/${planYearId}/policy-lines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coverageType,
+          planName,
+          tier,
+          employeeCost,
+          employerCost,
+          ratePeriod,
+        }),
+      });
 
-    setLoading(false);
+      if (!res.ok) {
+        setError(await readApiError(res, "Unable to add the policy line"));
+        return;
+      }
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Something went wrong");
-      return;
+      setPlanName("");
+      setEmployeeCost("");
+      setEmployerCost("");
+      router.refresh();
+    } catch {
+      setError("Unable to add the policy line. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setPlanName("");
-    setEmployeeCost("");
-    setEmployerCost("");
-    router.refresh();
   }
 
   async function handleDelete(id: string) {

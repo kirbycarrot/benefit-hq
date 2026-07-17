@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { acquireAdvisoryTransactionLock } from "@/lib/advisory-lock";
 import {
   addCurrencyAmounts,
   policyLineSchema,
@@ -41,7 +42,7 @@ export async function POST(
   }
 
   const policyLine = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${planYearId}, 0))`;
+    await acquireAdvisoryTransactionLock(tx, planYearId);
     const existingRatePeriod = await tx.policyLine.findFirst({
       where: { planYearId },
       select: { ratePeriod: true },
@@ -106,7 +107,7 @@ export async function PATCH(
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${planYearId}, 0))`;
+    await acquireAdvisoryTransactionLock(tx, planYearId);
     return tx.policyLine.updateMany({
       where: { planYearId },
       data: { ratePeriod: parsed.data.ratePeriod },
