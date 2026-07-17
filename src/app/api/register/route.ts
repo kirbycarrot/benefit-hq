@@ -22,17 +22,17 @@ export async function POST(request: Request) {
 
   const { name, email, password } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  const userCount = await prisma.user.count();
+  if (userCount > 0) {
     return NextResponse.json(
-      { error: "An account with that email already exists" },
-      { status: 409 }
+      { error: "Registration is closed. Ask an admin to create your account." },
+      { status: 403 }
     );
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.user.create({
-    data: { name, email, passwordHash },
+    data: { name, email, passwordHash, isAdmin: true },
   });
 
   return NextResponse.json({ ok: true });

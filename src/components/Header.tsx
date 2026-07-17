@@ -3,9 +3,11 @@ import { Logo } from "./Logo";
 
 export function Header({
   userEmail,
+  isAdmin,
   signOutAction,
 }: {
   userEmail: string;
+  isAdmin: boolean;
   signOutAction: () => Promise<void>;
 }) {
   return (
@@ -15,6 +17,14 @@ export function Header({
         <span className="text-[15px] font-extrabold text-text-900">Benefit HQ</span>
       </Link>
       <div className="flex items-center gap-[22px]">
+        {isAdmin && (
+          <Link
+            href="/settings"
+            className="text-[13px] font-semibold text-text-600 hover:text-text-900"
+          >
+            Settings
+          </Link>
+        )}
         <span className="text-[13px] text-text-600">{userEmail}</span>
         <form action={signOutAction}>
           <button

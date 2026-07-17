@@ -13,7 +13,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-bg-light">
-      <Header userEmail={session.user?.email ?? ""} signOutAction={signOutAction} />
+      <Header
+        userEmail={session.user?.email ?? ""}
+        isAdmin={session.user?.isAdmin ?? false}
+        signOutAction={signOutAction}
+      />
       <main className="px-11 py-10">{children}</main>
     </div>
   );
