@@ -62,6 +62,26 @@ npm start
 
 `npm start` listens on port `3030`. Place it behind an HTTPS reverse proxy such as Caddy and do not expose port `3030` directly to the internet.
 
+### Repeatable release deployment
+
+After the desired release has been pushed to GitHub, run the bundled deployment script from the production checkout:
+
+```sh
+./scripts/deploy-release.sh
+```
+
+The script refuses a dirty working tree, pulls with `--ff-only`, runs `npm ci`, explicitly regenerates Prisma Client, validates the environment, runs tests/lint/type-checking, builds before changing the database, deploys migrations, seeds chart definitions, prunes development dependencies, restarts `benefit-hq.service`, and checks `http://127.0.0.1:3030/login`.
+
+If the systemd unit has another name:
+
+```sh
+./scripts/deploy-release.sh --service your-service-name.service
+```
+
+For a user-level systemd unit, add `--user-service`. Use `--no-restart` when another supervisor handles startup, or `--health-url` when the local health-check address differs. Run `./scripts/deploy-release.sh --help` for every option.
+
+Database migrations are forward-only. The script deliberately stops before migration if verification or the production build fails, but it does not attempt to reverse a migration after one has been applied.
+
 The application uses `X-Real-IP`, falling back to the first `X-Forwarded-For` value, for credential and bootstrap throttling. The reverse proxy must overwrite these headers rather than trust client-supplied values. The built-in limiter is process-local and is appropriate for this application's current single-process deployment. Multi-instance deployments must enforce login throttling at the proxy or use a shared rate-limit store.
 
 The proxy or host firewall should also:

@@ -10,6 +10,7 @@
     "test": "tsx --test tests/**/*.test.ts",
     "test:watch": "tsx --test --watch tests/**/*.test.ts",
     "db:seed": "tsx prisma/seed.ts",
+    "deploy": "bash scripts/deploy-release.sh",
     "postinstall": "prisma generate"
   },
   "dependencies": {
