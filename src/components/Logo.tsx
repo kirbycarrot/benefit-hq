@@ -1,9 +1,9 @@
 const SIZES = {
-  sidebar: { box: 34, radius: 9, font: 13 },
+  header: { box: 30, radius: 8, font: 12 },
   hero: { box: 52, radius: 13, font: 20 },
 } as const;
 
-export function Logo({ variant = "sidebar" }: { variant?: keyof typeof SIZES }) {
+export function Logo({ variant = "header" }: { variant?: keyof typeof SIZES }) {
   const { box, radius, font } = SIZES[variant];
   return (
     <div

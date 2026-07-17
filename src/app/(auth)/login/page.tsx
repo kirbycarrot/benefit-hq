@@ -74,7 +74,7 @@ export default function LoginPage() {
         </button>
         <p className="mt-[18px] text-center text-[13px] text-text-600">
           Need an account?{" "}
-          <Link href="/register" className="font-semibold text-teal-deep hover:text-teal-deep-hover">
+          <Link href="/register" className="font-semibold text-link hover:text-link-hover">
             Sign up
           </Link>
         </p>

@@ -45,58 +45,40 @@ export default async function PlanYearDetailPage({
       >
         &larr; {planYear.client.name}
       </Link>
-
-      <div className="mt-3.5 mb-5 flex items-center gap-2.5 rounded-[14px] border border-border-light bg-white px-[22px] py-4">
-        <span className="inline-block h-2 w-2 rounded-full bg-navy" />
-        <span className="text-sm text-text-900">
-          {planYear.client.name} &middot; {planYear.label}
-        </span>
-      </div>
-
-      <div className="mb-[22px] flex items-center justify-between gap-6 rounded-2xl bg-ink-800 px-7 py-[26px]">
-        <div>
-          <div className="mb-2 text-[11px] font-bold tracking-[0.12em] text-teal-bright uppercase">
-            Policy details
-          </div>
-          <div className="mb-2 text-2xl font-extrabold text-white">{planYear.label}</div>
-          <div className="max-w-[460px] text-[13px] text-warm-hero-teal">
-            Enter the coverage, plan design, premiums, and contributions that belong in
-            this proposal. Effective {formatDate(planYear.effectiveDate)}.
-          </div>
-        </div>
-        <div className="shrink-0 rounded-full border border-ink-700-alt px-4 py-2 text-xs whitespace-nowrap text-warm-hero-mid">
-          {policyLines.length} plan{policyLines.length === 1 ? "" : "s"} &middot;{" "}
-          {planYear._count.employees} employees
-        </div>
-      </div>
+      <h1 className="mt-2.5 mb-1 text-[26px] font-extrabold text-text-900">
+        {planYear.label}
+      </h1>
+      <p className="mb-9 text-sm text-text-600">
+        Effective {formatDate(planYear.effectiveDate)}
+      </p>
 
       <div id="policy-details" className="scroll-mt-8">
-        <h2 className="mb-1 text-[17px] font-bold text-text-900">Policy options</h2>
-        <p className="mb-[18px] text-[13px] text-text-600">
-          Coverage, plan names, tiers, and premiums for this plan year.
+        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Policy details</h2>
+        <p className="mb-[18px] text-sm text-text-600">
+          Enter coverage types, plan names, tiers, and premiums for this plan year.
         </p>
         <PolicyLinesEditor planYearId={planYear.id} initialPolicyLines={policyLines} />
       </div>
 
       <div id="census" className="mt-10 scroll-mt-8">
-        <h2 className="mb-1 text-[17px] font-bold text-text-900">Census</h2>
-        <p className="mb-[18px] max-w-[560px] text-[13px] text-text-600">
+        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Census</h2>
+        <p className="mb-1 max-w-[640px] text-sm text-text-600">
           {planYear._count.employees > 0
             ? `${planYear._count.employees} employee(s) currently on file for this plan year. Uploading a new file replaces the existing census.`
             : "Upload the census workbook provided by the client to import employee demographics and elections."}
-          {latestUpload && (
-            <span className="mt-1 block text-xs text-text-400">
-              Last upload: {(latestUpload.filenames as string[]).join(", ")} (
-              {latestUpload.uploadedAt.toLocaleString()})
-            </span>
-          )}
         </p>
+        {latestUpload && (
+          <p className="mb-[18px] text-xs text-text-400">
+            Last upload: {(latestUpload.filenames as string[]).join(", ")} (
+            {latestUpload.uploadedAt.toLocaleString()})
+          </p>
+        )}
         <CensusUploader planYearId={planYear.id} />
       </div>
 
       <div className="mt-10">
-        <h2 className="mb-1 text-[17px] font-bold text-text-900">Charts &amp; deck</h2>
-        <p className="mb-[18px] text-[13px] text-text-600">
+        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Charts &amp; deck</h2>
+        <p className="mb-[18px] text-sm text-text-600">
           Choose which charts and tables to include, then generate the branded deck.
         </p>
         <Link
@@ -126,7 +108,7 @@ export default async function PlanYearDetailPage({
                   {deck.status === "ready" ? (
                     <a
                       href={`/api/decks/${deck.id}/download`}
-                      className="font-semibold text-teal-deep hover:text-teal-deep-hover"
+                      className="font-semibold text-link hover:text-link-hover"
                     >
                       Download
                     </a>

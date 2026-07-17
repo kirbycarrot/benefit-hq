@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
-import { Sidebar } from "@/components/Sidebar";
+import { Header } from "@/components/Header";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -12,9 +12,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar userEmail={session.user?.email ?? ""} signOutAction={signOutAction} />
-      <main className="min-w-0 flex-1 bg-bg-light px-11 py-9">{children}</main>
+    <div className="min-h-screen bg-bg-light">
+      <Header userEmail={session.user?.email ?? ""} signOutAction={signOutAction} />
+      <main className="px-11 py-10">{children}</main>
     </div>
   );
 }
