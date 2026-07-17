@@ -7,6 +7,7 @@ health_url="${BENEFIT_HQ_HEALTH_URL:-http://127.0.0.1:3030/login}"
 check_health=1
 force=0
 unit_temp=""
+unit_temp_dir=""
 
 usage() {
   cat <<'EOF'
@@ -36,7 +37,10 @@ fail() {
 
 cleanup() {
   if [[ -n "$unit_temp" && -f "$unit_temp" ]]; then
-    rm -f -- "$unit_temp"
+    rm -f -- "$unit_temp" || true
+  fi
+  if [[ -n "$unit_temp_dir" && -d "$unit_temp_dir" ]]; then
+    rmdir -- "$unit_temp_dir" || true
   fi
 }
 
@@ -90,13 +94,16 @@ case "$service_name" in
     ;;
 esac
 
-for required_command in curl cut dirname getent id install journalctl mktemp node npm rm sleep sudo systemctl; do
+for required_command in curl cut dirname getent id install journalctl mktemp node npm rm rmdir sleep sudo systemctl systemd-analyze; do
   command -v "$required_command" >/dev/null 2>&1 || fail "missing required command: $required_command"
 done
 
 [[ -f "$repo_root/.env" ]] || fail ".env is missing from $repo_root"
 [[ -f "$repo_root/.next/BUILD_ID" ]] || \
   fail "production build is missing; run ./scripts/deploy-release.sh --no-restart first"
+[[ "$repo_root" == /* ]] || fail "repository path is not absolute: $repo_root"
+[[ "$repo_root" != *$'\n'* && "$repo_root" != *$'\r'* ]] || \
+  fail "repository path contains an unsupported line break"
 
 service_user="$(id -un)"
 service_group="$(id -gn)"
@@ -121,7 +128,8 @@ if sudo test -e "$unit_path" && [[ $force -eq 0 ]]; then
   fail "$unit_path already exists; inspect it first or rerun with --force"
 fi
 
-unit_temp="$(mktemp "${TMPDIR:-/tmp}/benefit-hq-service.XXXXXX")"
+unit_temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/benefit-hq-service.XXXXXX")"
+unit_temp="$unit_temp_dir/$service_name"
 {
   printf '[Unit]\n'
   printf 'Description=Benefit HQ web application\n'
@@ -131,7 +139,7 @@ unit_temp="$(mktemp "${TMPDIR:-/tmp}/benefit-hq-service.XXXXXX")"
   printf 'Type=simple\n'
   printf 'User=%s\n' "$service_user"
   printf 'Group=%s\n' "$service_group"
-  printf 'WorkingDirectory=%s\n' "$(systemd_quote "$repo_root")"
+  printf 'WorkingDirectory=%s\n' "$repo_root"
   printf 'Environment=%s\n' "$(systemd_quote "HOME=$service_home")"
   printf 'Environment=%s\n' "$(systemd_quote "NODE_ENV=production")"
   printf 'Environment=%s\n' "$(systemd_quote "PATH=$runtime_path")"
@@ -147,12 +155,17 @@ unit_temp="$(mktemp "${TMPDIR:-/tmp}/benefit-hq-service.XXXXXX")"
   printf 'WantedBy=multi-user.target\n'
 } >"$unit_temp"
 
+printf '\n==> Validating the generated systemd unit\n'
+systemd-analyze verify "$unit_temp"
+
 printf '\n==> Installing %s for user %s\n' "$service_name" "$service_user"
 sudo install -o root -g root -m 0644 "$unit_temp" "$unit_path"
 sudo systemctl daemon-reload
+sudo systemctl reset-failed "$service_name" 2>/dev/null || true
 
 printf '\n==> Enabling and starting %s\n' "$service_name"
-if ! sudo systemctl enable --now "$service_name"; then
+sudo systemctl enable "$service_name"
+if ! sudo systemctl restart "$service_name"; then
   sudo systemctl --no-pager --full status "$service_name" >&2 || true
   sudo journalctl --no-pager -n 50 -u "$service_name" >&2 || true
   fail "$service_name could not be started"
