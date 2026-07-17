@@ -1,6 +1,6 @@
 # Benefit HQ
 
-Benefit HQ is a single-workspace benefits renewal application. Authenticated brokerage staff can manage clients and plan years, normalize carrier census workbooks, preview standard benefits charts, and generate branded PowerPoint decks.
+Benefit HQ is a single-workspace benefits renewal application. Authenticated brokerage staff can manage clients and plan years, import carrier census workbooks, enter policy rates, preview benefits analyses, and generate branded, presentation-ready PowerPoint decks.
 
 All authenticated users share the same clients and plan-year data. Administrators manage user accounts. This is intentional for one internal firm workspace; the current data model is not suitable for hosting unrelated customer organizations in one installation.
 
@@ -47,6 +47,17 @@ The development server is available at `http://localhost:3000`.
 Open `/register` for the initial setup, then enter the configured `BOOTSTRAP_TOKEN`. First-admin creation is serialized in PostgreSQL, so concurrent setup requests cannot create multiple bootstrap administrators.
 
 The seed command is required: it creates or updates the chart-definition catalog used by the chart selection screen and deck generator.
+
+## Product workflow
+
+1. Create a client and optionally add its logo and primary and secondary brand colors. Client details stay collapsed when an existing client is opened because branding is normally configured only once.
+2. Create a plan year. The form proposes the next calendar year's **Plan Year** label and defaults its effective date to January 1 of that year.
+3. Upload the carrier census workbook. A successful upload atomically replaces the census previously stored for that plan year.
+4. Add policy lines and their employee and employer rates. Coverage tiers use the full Employee, Employee + Spouse, Employee + Child, and Family labels.
+5. Open **Charts & tables** to review the analyses, enable or disable slides, and choose supported alternate views. Settings save to the plan year and are used by the PowerPoint generator.
+6. Select **Generate deck**, then use the displayed **Download PowerPoint** action when generation completes.
+
+The application layout, navigation, forms, login screen, chart previews, and action controls are responsive across mobile and desktop widths.
 
 ## Production
 
@@ -141,6 +152,51 @@ total premium = employee cost + employer cost
 
 The rate period is included in premium tables and aggregate chart titles so unlike units are not presented as comparable totals.
 
+## Charts, tables, and PowerPoint generation
+
+The **Charts & tables** page presents the catalog in collapsible story groups. Individual analyses can be enabled or disabled without changing the underlying census or policy data. The generated deck follows the same catalog order and honors the saved selections.
+
+The concise default presentation includes:
+
+- **Executive Summary** with headcount, average age, average tenure, geographic footprint, medical participation, and automatically generated observations.
+- **Renewal Comparison** with prior-versus-current rates and modeled annual employer, employee, and total cost changes. When only one plan year is available, the preview explains that a comparison year is required and the generated deck omits the renewal slide.
+- **Employer vs. Employee Cost Strategy** with contribution rates, employer-paid percentages, matched enrollment, and estimated annual spend by benefit, plan, and tier.
+- **Benefits Participation & Waivers** for Medical, Dental, and Vision, including eligible, enrolled, waived, not-recorded, and participation totals.
+- **Coverage Tier Enrollment** across Medical, Dental, and Vision.
+- **Workforce Risk & Continuity Profile** combining age and tenure into new-hire, established-workforce, Medicare-horizon, and continuity indicators.
+- **Workforce Geography**, which uses a state heat map when employees span multiple states, drills into counties when they are concentrated in one state, and falls back to a ZIP summary when a map would add no useful detail.
+- **Dependent Profile** and **Ancillary Benefits** summaries when matching source data is available.
+- **Data Quality Appendix** covering core census completeness, valid ZIP coverage, unmatched elections, and missing dates or salaries.
+
+Additional demographic, enrollment, premium, dependent, and ancillary charts remain available in the catalog but are disabled by default to keep the standard deck concise.
+
+### Alternate views
+
+Selected views are persisted with the plan year and carry through to the generated PowerPoint:
+
+| Analysis | Available views |
+| --- | --- |
+| Workforce Geography | Map, ranked bars, table |
+| Benefits Participation & Waivers | Participation cards, stacked bars, table |
+| Renewal Comparison | Comparison table, cost bars |
+| Employer vs. Employee Cost Strategy | Detailed table, contribution bars |
+| Medical, Dental, and Vision Coverage Tier Enrollment | Grouped bars, 100% stacked bars, table |
+
+Coverage-tier view changes stay synchronized across Medical, Dental, and Vision so the combined slide uses one coherent format. Unsupported or obsolete saved view values fall back to the curated default.
+
+### Presentation design
+
+PowerPoint output is designed as a complete client presentation rather than a direct export of the browser preview. It includes:
+
+- A branded cover using the client's logo and colors.
+- A consistent content master with the client name, plan-year label, effective date, and slide number.
+- Data-derived, insight-led slide titles rather than chart names alone.
+- Visual section dividers inserted only for sections that contain selected output.
+- **Key Takeaway** treatments that summarize the most important fact shown on applicable slides.
+- A final prioritized recommendations slide generated only from measurable conditions in the selected analyses, such as data gaps, low participation, modeled renewal increases, contribution variation, workforce continuity exposure, or geographic concentration.
+
+Browser previews and PowerPoint slides use the same calculation results, but each is laid out for its medium. Generated decks and client logos are private files and require an authenticated application request to download.
+
 ## Client lifecycle
 
 Administrators can archive a client from the collapsed **Edit client details** area. Archived clients are hidden from the active list and shown to administrators in a separate recoverable list. Archived clients are read-only until restored.
@@ -156,7 +212,17 @@ npx tsc --noEmit --incremental false
 npm run build
 ```
 
-The test suite covers census normalization and SSN disposal, atomic census rollback behavior, upload signatures, premium validation, bootstrap controls, and authentication throttling primitives.
+The test suite covers census normalization and SSN disposal, atomic census rollback behavior, upload signatures, premium validation, bootstrap controls, authentication throttling primitives, chart calculations, renewal behavior, geography selection, alternate chart views, narrative titles, and data-derived presentation recommendations.
+
+## Application icons
+
+Benefit HQ's favicon, browser icon, Apple touch icon, and installable application icons are generated from `public/brand/benefit-hq-mark.svg`:
+
+```sh
+npm run assets:icons
+```
+
+Commit the regenerated icon files whenever the source brand mark changes.
 
 ## Backups and recovery
 
