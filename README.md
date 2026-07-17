@@ -152,6 +152,8 @@ total premium = employee cost + employer cost
 
 The rate period is included in premium tables and aggregate chart titles so unlike units are not presented as comparable totals.
 
+**Known gap — tier coverage vs. census tiers:** `computeContributionStrategy` (`src/lib/charts/compute.ts`) matches a census election to a policy line by benefit type + tier first, and only falls back to plan-name matching to disambiguate when a benefit+tier has more than one policy line. If Policy Details does not have a line for every tier actually present in the census (e.g. only "Employee" and "Employee + Spouse" are entered but the census also has "Employee + Child" and "Family" elections), those elections cannot match anything and are silently dropped from the enrolled/premium totals — surfaced only as a match-rate stat and a footnote sentence on the Employer vs. Employee Cost Strategy chart, not as an upfront warning. Worth revisiting when Policy Details is reworked: either require/prompt for a rate line per tier actually seen in the census, or surface the tier gap explicitly before deck generation rather than after.
+
 ## Charts, tables, and PowerPoint generation
 
 The **Charts & tables** page presents the catalog in collapsible story groups. Individual analyses can be enabled or disabled without changing the underlying census or policy data. The generated deck follows the same catalog order and honors the saved selections.

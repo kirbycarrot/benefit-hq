@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in — Benefit HQ</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-body">
+      <div class="wrap" style="padding: 0; max-width: 920px; width: 100%; margin: 0 auto;">
+        <a class="back-link" href="index.html">&larr; Back to home</a>
+      </div>
+      <div class="auth-grid">
+        <div class="auth-hero">
+          <a class="brand" href="index.html">
+            <span class="brand-mark"><img src="assets/mark.svg" alt="" /></span>
+            Benefit HQ
+          </a>
+          <div class="eyebrow eyebrow-light">Benefits renewal workspace</div>
+          <h1>Sign in to your firm's workspace.</h1>
+          <p>
+            Each firm using Benefit HQ has its own dedicated workspace at its own address.
+            Enter it to reach your firm's clients, plan years, and decks.
+          </p>
+          <div class="status-note">
+            <span class="dot"></span>
+            <span>Protected access for your firm's workspace.</span>
+          </div>
+        </div>
+
+        <div class="auth-card">
+          <div class="eyebrow">Sign in</div>
+          <h2>Enter your firm workspace</h2>
+          <p class="field-help">
+            Enter the workspace your administrator set up to connect to your firm's dedicated
+            Benefit HQ environment.
+          </p>
+
+          <form id="workspace-form" novalidate>
+            <label class="field-label" for="subdomain">Firm workspace</label>
+            <div class="subdomain-field">
+              <input
+                type="text"
+                id="subdomain"
+                name="subdomain"
+                placeholder="firm"
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                inputmode="text"
+                maxlength="63"
+                required
+              />
+              <span class="suffix">.benefit-hq.com</span>
+            </div>
+            <p class="form-error" id="workspace-error" hidden>
+              Enter your firm's workspace to continue.
+            </p>
+            <button type="submit" class="btn btn-primary btn-block">Continue to sign in</button>
+          </form>
+
+          <p class="helper-text">
+            Need help finding your workspace? Contact your firm's administrator.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var BASE_DOMAIN = "benefit-hq.com";
+      var form = document.getElementById("workspace-form");
+      var input = document.getElementById("subdomain");
+      var error = document.getElementById("workspace-error");
+
+      input.addEventListener("input", function () {
+        input.value = input.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+      });
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var subdomain = input.value.trim().replace(/^-+|-+$/g, "");
+
+        if (!subdomain) {
+          error.hidden = false;
+          input.focus();
+          return;
+        }
+
+        error.hidden = true;
+        window.location.href = "https://" + subdomain + "." + BASE_DOMAIN + "/";
+      });
+    })();
+  </script>
+</body>
+</html>

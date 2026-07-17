@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Benefit HQ — From census data to a client-ready proposal</title>
+  <meta
+    name="description"
+    content="Benefit HQ helps benefits brokers manage clients and plan years, import carrier census workbooks, enter policy rates, and generate branded, presentation-ready decks in minutes."
+  />
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/">
+        <span class="brand-mark"><img src="assets/mark.svg" alt="" /></span>
+        Benefit HQ
+      </a>
+      <nav class="nav-links">
+        <a class="nav-link" href="#workflow">How it works</a>
+        <a class="nav-link" href="#who-its-for">Who it's for</a>
+        <a class="btn btn-primary" href="login.html">Sign in</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <div class="eyebrow">Benefits renewal workspace</div>
+          <h1>From census data to a client-ready proposal.</h1>
+          <p class="lede">
+            Benefit HQ helps brokerage teams manage clients and plan years, import carrier
+            census workbooks, enter policy rates, and generate branded, presentation-ready
+            PowerPoint decks — in minutes, not days.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="login.html">Sign in</a>
+            <a class="btn btn-secondary" href="#workflow">See how it works</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="deck-card">
+            <div class="status"><span class="dot"></span>Deck ready</div>
+            <h3>Acme Manufacturing</h3>
+            <div class="sub">2027 Plan Year</div>
+            <div class="row">
+              <span>Policy lines</span>
+              <span>Medical · Dental · Vision</span>
+            </div>
+            <div class="row">
+              <span>Census</span>
+              <span>Uploaded</span>
+            </div>
+            <div class="row">
+              <span>Deck status</span>
+              <span class="success">Generated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Workflow</div>
+          <h2>From renewal data to a finished deck</h2>
+        </div>
+        <div class="workflow-grid">
+          <div class="workflow-step">
+            <div class="num">01</div>
+            <h3>Set up the client</h3>
+            <p>
+              Add a client once, with logo and brand colors. Details stay configured so every
+              deck matches your client's identity.
+            </p>
+          </div>
+          <div class="workflow-step">
+            <div class="num">02</div>
+            <h3>Import the census</h3>
+            <p>
+              Upload the carrier census workbook for a plan year. A new upload atomically
+              replaces the one before it.
+            </p>
+          </div>
+          <div class="workflow-step">
+            <div class="num">03</div>
+            <h3>Enter rates</h3>
+            <p>
+              Add policy lines and employee and employer rates across every coverage tier,
+              from employee-only to family.
+            </p>
+          </div>
+          <div class="workflow-step">
+            <div class="num">04</div>
+            <h3>Generate the deck</h3>
+            <p>
+              Review chart and table previews, choose the views you need, then generate a
+              branded, presentation-ready PowerPoint.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="who-its-for">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Coverage</div>
+          <h2>Who it's for</h2>
+        </div>
+        <div class="audience-grid">
+          <div class="audience-card">
+            <h3>Benefits brokers &amp; consultants</h3>
+            <p>Run the full renewal cycle for every client from one shared workspace.</p>
+          </div>
+          <div class="audience-card">
+            <h3>Account managers</h3>
+            <p>Turn census and rate data into a client-ready deck without design work.</p>
+          </div>
+          <div class="audience-card">
+            <h3>Agency principals</h3>
+            <p>Keep every client's branding and plan-year history organized in one place.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band-dark">
+      <div class="wrap">
+        <div class="band-inner">
+          <div class="band-text">
+            <div class="eyebrow">Built for your firm</div>
+            <h2>Your firm's workspace, your renewal data.</h2>
+            <p>
+              Every firm gets its own dedicated Benefit HQ workspace at its own address. Your
+              team manages its clients and plan years; Benefit HQ keeps the software running.
+            </p>
+          </div>
+          <a class="btn btn-primary" href="login.html">Sign in</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <small>&copy; <span id="year"></span> Benefit HQ</small>
+      <a href="login.html">Sign in</a>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
