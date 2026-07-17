@@ -109,6 +109,88 @@ function participationDataset(): ChartDataset {
   };
 }
 
+function workforceRiskDataset(): ChartDataset {
+  const base = dataset();
+  const dates: [string | null, string | null][] = [
+    ["1995-01-01", "2026-07-01"],
+    ["1985-01-01", "2020-01-01"],
+    ["1964-01-01", "2018-01-01"],
+    ["1962-01-01", "2014-01-01"],
+    ["1959-01-01", "2011-01-01"],
+    [null, null],
+  ];
+
+  return {
+    ...base,
+    employees: dates.map(([birthDate, hireDate], index) => ({
+      ...base.employees[0],
+      id: `risk-employee-${index}`,
+      employeeNumber: `R-${index + 1}`,
+      birthDate: birthDate ? new Date(`${birthDate}T00:00:00Z`) : null,
+      hireDate: hireDate ? new Date(`${hireDate}T00:00:00Z`) : null,
+      elections: [],
+    })),
+  };
+}
+
+function dataQualityDataset(): ChartDataset {
+  const base = dataset();
+  const profiles = [
+    {
+      birthDate: new Date("1985-01-01T00:00:00Z"),
+      hireDate: new Date("2020-01-01T00:00:00Z"),
+      postalCode: "80202",
+      baseSalary: 75000 as never,
+      optionName: "EE",
+    },
+    {
+      birthDate: new Date("1990-01-01T00:00:00Z"),
+      hireDate: new Date("2021-01-01T00:00:00Z"),
+      postalCode: "99999",
+      baseSalary: null,
+      optionName: "Family",
+    },
+    {
+      birthDate: null,
+      hireDate: new Date("2022-01-01T00:00:00Z"),
+      postalCode: "80301",
+      baseSalary: 65000 as never,
+      optionName: null,
+    },
+    {
+      birthDate: new Date("1975-01-01T00:00:00Z"),
+      hireDate: null,
+      postalCode: null,
+      baseSalary: 90000 as never,
+      optionName: "Waive",
+    },
+  ];
+
+  return {
+    ...base,
+    employees: profiles.map((profile, index) => ({
+      ...base.employees[0],
+      id: `quality-employee-${index}`,
+      employeeNumber: `Q-${index + 1}`,
+      birthDate: profile.birthDate,
+      hireDate: profile.hireDate,
+      postalCode: profile.postalCode,
+      baseSalary: profile.baseSalary,
+      elections:
+        profile.optionName === null
+          ? []
+          : [
+              {
+                ...base.employees[0].elections[0],
+                id: `quality-election-${index}`,
+                employeeId: `quality-employee-${index}`,
+                optionName: profile.optionName,
+              },
+            ],
+    })),
+  };
+}
+
 test("premium chart output carries the rate period and enforced total", () => {
   const result = CHART_COMPUTE["premium-summary-table"](dataset());
   assert.equal(result.kind, "table");
@@ -153,6 +235,69 @@ test("executive summary combines workforce metrics with data-derived observation
   assert.match(result.observations[2], /largest tenure group/);
 });
 
+test("workforce risk profile combines age and tenure with transparent denominators", () => {
+  const result = CHART_COMPUTE["workforce-risk-profile"](workforceRiskDataset());
+
+  assert.equal(result.kind, "risk");
+  if (result.kind !== "risk") return;
+  assert.equal(result.totalEmployees, 6);
+  assert.equal(result.birthDateRecords, 5);
+  assert.equal(result.hireDateRecords, 5);
+  assert.equal(result.completeRecords, 5);
+  assert.deepEqual(
+    result.indicators.map(({ key, value, percentage, denominator }) => ({
+      key,
+      value,
+      percentage,
+      denominator,
+    })),
+    [
+      { key: "new-hires", value: 1, percentage: 20, denominator: 5 },
+      { key: "established", value: 4, percentage: 80, denominator: 5 },
+      { key: "medicare-horizon", value: 2, percentage: 40, denominator: 5 },
+      { key: "continuity-exposure", value: 2, percentage: 40, denominator: 5 },
+    ]
+  );
+  assert.equal(
+    result.cells.reduce((sum, cell) => sum + cell.count, 0),
+    result.completeRecords
+  );
+  assert.equal(result.observations.length, 3);
+  assert.match(result.note, /do not predict retirement/);
+});
+
+test("data quality appendix reconciles field, ZIP, and election coverage", () => {
+  const result = CHART_COMPUTE["data-quality-appendix"](dataQualityDataset());
+
+  assert.equal(result.kind, "quality");
+  if (result.kind !== "quality") return;
+  assert.equal(result.totalEmployees, 4);
+  assert.equal(result.censusCompleteness, 75);
+  assert.equal(result.completeRecords, 1);
+  assert.equal(result.recordedZipRecords, 3);
+  assert.equal(result.validZipRecords, 2);
+  assert.equal(result.activeElections, 2);
+  assert.equal(result.matchedElections, 1);
+  assert.equal(result.unmatchedElections, 1);
+  assert.deepEqual(
+    result.fields.map(({ key, complete, missing, coverage }) => ({
+      key,
+      complete,
+      missing,
+      coverage,
+    })),
+    [
+      { key: "birth-date", complete: 3, missing: 1, coverage: 75 },
+      { key: "hire-date", complete: 3, missing: 1, coverage: 75 },
+      { key: "zip", complete: 3, missing: 1, coverage: 75 },
+      { key: "salary", complete: 3, missing: 1, coverage: 75 },
+    ]
+  );
+  assert.equal(result.findings.length, 3);
+  assert.match(result.findings[1], /not recognized/);
+  assert.match(result.findings[2], /do not match/);
+});
+
 test("benefits participation reconciles enrolled, waived, and unreported employees", () => {
   const result = CHART_COMPUTE["benefits-participation-funnel"](
     participationDataset()
@@ -192,6 +337,40 @@ test("benefits participation reconciles enrolled, waived, and unreported employe
       benefit.eligible
     );
   }
+});
+
+test("contribution strategy matches elections to tiers and annualizes monthly rates", () => {
+  const result = CHART_COMPUTE["contribution-strategy"](dataset());
+
+  assert.equal(result.kind, "contribution");
+  if (result.kind !== "contribution") return;
+  assert.equal(result.matchedElections, 1);
+  assert.equal(result.totalElections, 1);
+  assert.equal(result.rows[0].enrolled, 1);
+  assert.equal(result.rows[0].employerPaidPercentage, 75);
+  assert.equal(result.annualEmployeeSpend, 1500);
+  assert.equal(result.annualEmployerSpend, 4500);
+  assert.equal(result.annualTotalSpend, 6000);
+});
+
+test("contribution strategy assumes 26 periods and recognizes full spouse tier names", () => {
+  const ds = dataset();
+  ds.employees[0].elections[0].optionName = "Employee + Spouse";
+  ds.policyLines[0].tier = "EE+Spouse";
+  ds.policyLines[0].employeeCost = 10 as never;
+  ds.policyLines[0].employerCost = 30 as never;
+  ds.policyLines[0].totalPremium = 40 as never;
+  ds.policyLines[0].ratePeriod = "per-pay-period";
+
+  const result = CHART_COMPUTE["contribution-strategy"](ds);
+
+  assert.equal(result.kind, "contribution");
+  if (result.kind !== "contribution") return;
+  assert.equal(result.rows[0].tier, "Employee + Spouse");
+  assert.equal(result.rows[0].enrolled, 1);
+  assert.equal(result.annualEmployeeSpend, 260);
+  assert.equal(result.annualEmployerSpend, 780);
+  assert.equal(result.annualTotalSpend, 1040);
 });
 
 test("workforce geography uses a state map when employees span states", () => {

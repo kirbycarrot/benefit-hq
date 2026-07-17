@@ -27,6 +27,38 @@ type ChartDefinition = {
 const COLORS = ["#1F2937", "#2FE0D2", "#F59E0B", "#6366F1", "#EF4444"];
 const CHART_FONT = { fontFamily: "Inter, sans-serif", fontSize: 11 };
 
+function formatCompactCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: value >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: value >= 10000 ? 1 : 0,
+  }).format(value);
+}
+
+function formatRate(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function ratePeriodShort(ratePeriod: string): string {
+  if (ratePeriod === "monthly") return "month";
+  if (ratePeriod === "per-pay-period") return "pay period";
+  if (ratePeriod === "annual") return "year";
+  return ratePeriod;
+}
+
+function riskHeatColor(value: number, maximum: number): string {
+  if (value === 0 || maximum === 0) return "#F3F4F3";
+  const shades = ["#DCE2DF", "#B7C3BE", "#83958E", "#526A61", "#1F2937"];
+  const index = Math.min(shades.length - 1, Math.ceil((value / maximum) * shades.length) - 1);
+  return shades[index];
+}
+
 export function ChartSelectionScreen({
   planYearId,
   chartDefinitions,
@@ -205,6 +237,322 @@ function ChartPreview({ result }: { result: ChartResult }) {
           })}
         </div>
         <p className="mt-3 text-[10px] leading-4 text-text-400">{result.note}</p>
+      </div>
+    );
+  }
+
+  if (result.kind === "contribution") {
+    const matchPercentage = result.totalElections
+      ? (result.matchedElections / result.totalElections) * 100
+      : 0;
+
+    return (
+      <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
+        <div className="grid grid-cols-2 gap-px bg-border-lighter lg:grid-cols-4">
+          {[
+            { label: "Estimated annual premium", value: result.annualTotalSpend },
+            { label: "Employer-funded annual", value: result.annualEmployerSpend },
+            { label: "Employee-funded annual", value: result.annualEmployeeSpend },
+          ].map((metric) => (
+            <div key={metric.label} className="bg-panel-tint px-3 py-3.5 sm:px-4">
+              <p className="text-lg font-extrabold text-text-900 sm:text-xl">
+                {formatCompactCurrency(metric.value)}
+              </p>
+              <p className="mt-1 text-[10px] leading-4 text-text-400">{metric.label}</p>
+            </div>
+          ))}
+          <div className="bg-panel-tint px-3 py-3.5 sm:px-4">
+            <p className="text-lg font-extrabold text-text-900 sm:text-xl">
+              {matchPercentage.toFixed(1)}%
+            </p>
+            <p className="mt-1 text-[10px] leading-4 text-text-400">
+              Elections matched · {result.matchedElections} of {result.totalElections}
+            </p>
+          </div>
+        </div>
+
+        {result.rows.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-[940px] divide-y divide-border-lighter text-xs">
+              <thead className="bg-white">
+                <tr>
+                  {[
+                    "Benefit / plan",
+                    "Coverage tier",
+                    "Enrolled",
+                    "Employee deduction",
+                    "Employer contribution",
+                    "Employer paid",
+                    "Est. annual premium",
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      className="px-3 py-2.5 text-left text-[10px] font-bold tracking-[0.04em] whitespace-nowrap text-text-400 uppercase"
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-lighter">
+                {result.rows.map((row, index) => (
+                  <tr key={`${row.benefit}-${row.plan}-${row.tier}-${index}`}>
+                    <td className="px-3 py-2.5">
+                      <p className="font-semibold text-text-900">{row.benefit}</p>
+                      <p className="text-[10px] text-text-400">{row.plan}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-text-600">{row.tier}</td>
+                    <td className="px-3 py-2.5 font-semibold text-text-900">{row.enrolled}</td>
+                    <td className="px-3 py-2.5 text-text-600">
+                      {formatRate(row.employeeRate)} / {ratePeriodShort(row.ratePeriod)}
+                    </td>
+                    <td className="px-3 py-2.5 text-text-600">
+                      {formatRate(row.employerRate)} / {ratePeriodShort(row.ratePeriod)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-14 overflow-hidden rounded-full bg-border-lighter">
+                          <div
+                            className="h-full bg-ink-900"
+                            style={{ width: `${Math.min(100, row.employerPaidPercentage)}%` }}
+                          />
+                        </div>
+                        <span className="font-semibold text-text-900">
+                          {row.employerPaidPercentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 font-bold text-text-900">
+                      {formatCompactCurrency(row.annualTotalSpend)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-4 py-8 text-center text-xs text-text-400">
+            Add policy rates to calculate contribution strategy and annual spend.
+          </p>
+        )}
+        <p className="border-t border-border-lighter bg-panel-tint px-4 py-3 text-[10px] leading-4 text-text-400">
+          {result.note}
+        </p>
+      </div>
+    );
+  }
+
+  if (result.kind === "risk") {
+    const maximumCell = Math.max(0, ...result.cells.map((cell) => cell.count));
+
+    return (
+      <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
+        <div className="grid grid-cols-2 gap-px bg-border-lighter lg:grid-cols-4">
+          {result.indicators.map((indicator) => (
+            <div key={indicator.key} className="min-w-0 bg-panel-tint px-3 py-3.5 sm:px-4">
+              <div className="flex items-baseline gap-2">
+                <p className="text-xl font-extrabold text-text-900 sm:text-2xl">
+                  {indicator.value}
+                </p>
+                <p className="text-xs font-bold text-text-600">
+                  {indicator.percentage.toFixed(1)}%
+                </p>
+              </div>
+              <p className="mt-1 text-xs font-semibold text-text-900">{indicator.label}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-text-400">
+                {indicator.definition} · {indicator.denominator} records
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(240px,1fr)]">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-xs font-bold text-text-900">Age × tenure concentration</p>
+                <p className="mt-0.5 text-[10px] text-text-400">
+                  {result.completeRecords} of {result.totalEmployees} employees have both dates
+                </p>
+              </div>
+              <p className="text-[10px] text-text-400">Darker cells = more employees</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-[560px] border-separate border-spacing-1 text-center text-[10px]">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-1 text-left font-semibold text-text-400">Age</th>
+                    {result.tenureBands.map((tenureBand) => (
+                      <th key={tenureBand} className="px-2 py-1 font-semibold text-text-600">
+                        {tenureBand}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.ageBands.map((ageBand) => (
+                    <tr key={ageBand}>
+                      <th className="px-2 py-2 text-left font-semibold whitespace-nowrap text-text-600">
+                        {ageBand}
+                      </th>
+                      {result.tenureBands.map((tenureBand) => {
+                        const count =
+                          result.cells.find(
+                            (cell) =>
+                              cell.ageBand === ageBand && cell.tenureBand === tenureBand
+                          )?.count ?? 0;
+                        const backgroundColor = riskHeatColor(count, maximumCell);
+                        const darkText = count === 0 || maximumCell === 0 || count / maximumCell < 0.5;
+                        return (
+                          <td
+                            key={tenureBand}
+                            className={`h-11 rounded-[7px] font-bold ${darkText ? "text-text-900" : "text-white"}`}
+                            style={{ backgroundColor }}
+                          >
+                            {count}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-[10px] bg-panel-tint p-4">
+            <p className="text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+              Planning observations
+            </p>
+            <div className="mt-3 space-y-3">
+              {result.observations.map((observation, index) => (
+                <div key={observation} className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <p className="text-[11px] leading-[1.45] text-text-600">{observation}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 border-t border-border-lighter pt-3 text-[9px] leading-4 text-text-400">
+              {result.note}
+            </p>
+          </div>
+        </div>
+
+        <p className="border-t border-border-lighter bg-panel-tint px-4 py-2.5 text-[9px] leading-4 text-text-400">
+          Data coverage: birth dates {result.birthDateRecords}/{result.totalEmployees} · hire dates{" "}
+          {result.hireDateRecords}/{result.totalEmployees} · both {result.completeRecords}/
+          {result.totalEmployees}
+        </p>
+      </div>
+    );
+  }
+
+  if (result.kind === "quality") {
+    const validZipPercentage = result.totalEmployees
+      ? (result.validZipRecords / result.totalEmployees) * 100
+      : 0;
+    const completeRecordPercentage = result.totalEmployees
+      ? (result.completeRecords / result.totalEmployees) * 100
+      : 0;
+    const matchPercentage = result.activeElections
+      ? (result.matchedElections / result.activeElections) * 100
+      : null;
+    const metrics = [
+      {
+        label: "Core census completeness",
+        value: `${result.censusCompleteness.toFixed(1)}%`,
+        detail: "Across birth date, hire date, ZIP, and salary",
+      },
+      {
+        label: "Valid ZIP coverage",
+        value: `${validZipPercentage.toFixed(1)}%`,
+        detail: `${result.validZipRecords} of ${result.totalEmployees} employees mapped`,
+      },
+      {
+        label: "Unmatched elections",
+        value: String(result.unmatchedElections),
+        detail:
+          matchPercentage === null
+            ? "No active elections to match"
+            : `${matchPercentage.toFixed(1)}% rate-row match coverage`,
+        attention: result.unmatchedElections > 0,
+      },
+      {
+        label: "Fully complete records",
+        value: `${completeRecordPercentage.toFixed(1)}%`,
+        detail: `${result.completeRecords} of ${result.totalEmployees} employees`,
+      },
+    ];
+
+    return (
+      <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
+        <div className="grid grid-cols-2 gap-px bg-border-lighter lg:grid-cols-4">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="min-w-0 bg-panel-tint px-3 py-3.5 sm:px-4">
+              <p
+                className={`text-xl font-extrabold sm:text-2xl ${metric.attention ? "text-amber" : "text-text-900"}`}
+              >
+                {metric.value}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-text-900">{metric.label}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-text-400">{metric.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
+          <div className="rounded-[10px] border border-border-lighter p-4">
+            <p className="text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+              Census field audit
+            </p>
+            <div className="mt-3 space-y-3">
+              {result.fields.map((field) => (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <span className="font-semibold text-text-900">{field.label}</span>
+                    <span className="whitespace-nowrap text-text-600">
+                      {field.complete} complete · {field.missing} missing
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-border-lighter">
+                      <div
+                        className="h-full rounded-full bg-ink-900"
+                        style={{ width: `${Math.min(100, field.coverage)}%` }}
+                      />
+                    </div>
+                    <span className="w-11 text-right text-[10px] font-bold text-text-600">
+                      {field.coverage.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[10px] bg-panel-tint p-4">
+            <p className="text-[11px] font-bold tracking-[0.08em] text-text-400 uppercase">
+              Quality findings
+            </p>
+            <div className="mt-3 space-y-3">
+              {result.findings.map((finding, index) => (
+                <div key={finding} className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <p className="text-[11px] leading-[1.45] text-text-600">{finding}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="border-t border-border-lighter bg-panel-tint px-4 py-3 text-[9px] leading-4 text-text-400">
+          {result.note}
+        </p>
       </div>
     );
   }

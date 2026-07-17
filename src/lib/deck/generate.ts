@@ -38,6 +38,39 @@ function paletteFor(primary: string, secondary: string): string[] {
   return [secondary, primary, ...PALETTE_EXTRA].map(stripHash);
 }
 
+function mixWithWhite(hex: string, intensity: number): string {
+  const color = stripHash(hex);
+  const red = Number.parseInt(color.slice(0, 2), 16);
+  const green = Number.parseInt(color.slice(2, 4), 16);
+  const blue = Number.parseInt(color.slice(4, 6), 16);
+  const mix = (channel: number) =>
+    Math.round(255 - (255 - channel) * Math.max(0, Math.min(1, intensity)))
+      .toString(16)
+      .padStart(2, "0");
+  return `${mix(red)}${mix(green)}${mix(blue)}`.toUpperCase();
+}
+
+function compactCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: Math.abs(value) >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: Math.abs(value) >= 10000 ? 1 : 0,
+  }).format(value);
+}
+
+function rateCurrency(value: number, ratePeriod: string): string {
+  const suffix =
+    ratePeriod === "monthly"
+      ? "mo"
+      : ratePeriod === "per-pay-period"
+        ? "pay"
+        : ratePeriod === "annual"
+          ? "yr"
+          : ratePeriod;
+  return `$${value.toFixed(2)} / ${suffix}`;
+}
+
 function addHeader(slide: PptxGenJS.Slide, title: string, primary: string, secondary: string) {
   slide.addShape("rect", { x: 0, y: 0, w: SLIDE_W, h: 0.9, fill: { color: primary } });
   slide.addShape("rect", { x: 0, y: 0.9, w: SLIDE_W, h: 0.06, fill: { color: secondary } });
@@ -361,6 +394,790 @@ export function addBenefitsParticipationSlide(
     h: 0.34,
     fontSize: 9.5,
     color: "6B7280",
+    margin: 0,
+    fit: "shrink",
+  });
+}
+
+export function addContributionStrategySlides(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "contribution" }>,
+  primary: string,
+  secondary: string
+) {
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  const firstPageRows = result.rows.slice(0, 8);
+  const remainingRows = result.rows.slice(8);
+  const pages = [
+    { rows: firstPageRows, first: true },
+    ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
+      rows: remainingRows.slice(index * 10, index * 10 + 10),
+      first: false,
+    })),
+  ];
+
+  const tableRows = (rows: typeof result.rows): PptxGenJS.TableRow[] => {
+    const header: PptxGenJS.TableRow = [
+      "Benefit / plan",
+      "Coverage tier",
+      "Enrolled",
+      "Employee deduction",
+      "Employer contribution",
+      "Employer paid",
+      "Est. annual premium",
+    ].map((text) => ({
+      text,
+      options: {
+        fill: { color: primaryColor },
+        color: "FFFFFF",
+        bold: true,
+        fontSize: 8.5,
+        margin: 0.06,
+      },
+    }));
+
+    const body: PptxGenJS.TableRow[] = rows.map((row, index) => {
+      const fill = index % 2 === 0 ? "FFFFFF" : "F7F8F7";
+      const baseOptions = { fill: { color: fill }, color: "273036", fontSize: 8.5, margin: 0.06 };
+      const benefitPlan = row.plan ? `${row.benefit} · ${row.plan}` : row.benefit;
+      return [
+        { text: benefitPlan, options: { ...baseOptions, bold: true } },
+        { text: row.tier, options: baseOptions },
+        { text: String(row.enrolled), options: { ...baseOptions, bold: true, align: "center" } },
+        { text: rateCurrency(row.employeeRate, row.ratePeriod), options: baseOptions },
+        { text: rateCurrency(row.employerRate, row.ratePeriod), options: baseOptions },
+        {
+          text: `${row.employerPaidPercentage.toFixed(1)}%`,
+          options: {
+            ...baseOptions,
+            bold: true,
+            color: row.employerPaidPercentage < 50 ? "B45309" : primaryColor,
+            align: "center",
+          },
+        },
+        {
+          text: compactCurrency(row.annualTotalSpend),
+          options: { ...baseOptions, bold: true, align: "right" },
+        },
+      ];
+    });
+    return [header, ...body];
+  };
+
+  pages.forEach((page, pageIndex) => {
+    const slide = pres.addSlide();
+    addHeader(
+      slide,
+      page.first ? result.title : `${result.title} (continued ${pageIndex + 1})`,
+      primary,
+      secondary
+    );
+
+    let tableY = 1.28;
+    if (page.first) {
+      const matchPercentage = result.totalElections
+        ? (result.matchedElections / result.totalElections) * 100
+        : 0;
+      const summaryMetrics = [
+        { label: "EST. ANNUAL PREMIUM", value: compactCurrency(result.annualTotalSpend) },
+        { label: "EMPLOYER-FUNDED", value: compactCurrency(result.annualEmployerSpend) },
+        { label: "EMPLOYEE-FUNDED", value: compactCurrency(result.annualEmployeeSpend) },
+        {
+          label: "ELECTIONS MATCHED",
+          value: `${matchPercentage.toFixed(1)}%`,
+          detail: `${result.matchedElections} of ${result.totalElections}`,
+        },
+      ];
+      const summaryGap = 0.15;
+      const summaryX = 0.5;
+      const summaryW = (SLIDE_W - 1 - summaryGap * 3) / 4;
+      summaryMetrics.forEach((metric, index) => {
+        const x = summaryX + index * (summaryW + summaryGap);
+        slide.addShape("roundRect", {
+          x,
+          y: 1.15,
+          w: summaryW,
+          h: 0.88,
+          fill: { color: "F7F8F7" },
+          line: { color: "E5E7EB", pt: 0.5 },
+          rectRadius: 0.04,
+        });
+        slide.addShape("rect", {
+          x,
+          y: 1.15,
+          w: 0.08,
+          h: 0.88,
+          fill: { color: secondaryColor },
+          line: { color: secondaryColor, transparency: 100 },
+        });
+        slide.addText(metric.value, {
+          x: x + 0.22,
+          y: 1.31,
+          w: summaryW - 0.36,
+          h: 0.34,
+          fontSize: 20,
+          bold: true,
+          color: primaryColor,
+          margin: 0,
+          fit: "shrink",
+        });
+        slide.addText(metric.label, {
+          x: x + 0.22,
+          y: 1.7,
+          w: summaryW - 0.36,
+          h: 0.15,
+          fontSize: 7.5,
+          bold: true,
+          color: "6B7280",
+          charSpacing: 0.7,
+          margin: 0,
+        });
+        if (metric.detail) {
+          slide.addText(metric.detail, {
+            x: x + summaryW - 0.9,
+            y: 1.7,
+            w: 0.68,
+            h: 0.15,
+            fontSize: 7.5,
+            color: "6B7280",
+            align: "right",
+            margin: 0,
+          });
+        }
+      });
+      tableY = 2.25;
+    }
+
+    if (page.rows.length > 0) {
+      slide.addTable(tableRows(page.rows), {
+        x: 0.5,
+        y: tableY,
+        w: SLIDE_W - 1,
+        colW: [2.4, 1.8, 0.8, 1.8, 1.8, 1.25, 2.48],
+        rowH: 0.46,
+        border: { type: "solid", color: "E5E7EB", pt: 0.4 },
+        autoPage: false,
+        margin: 0.06,
+      });
+    } else {
+      slide.addText("Add policy rates to calculate contribution strategy and annual spend.", {
+        x: 0.75,
+        y: 3.2,
+        w: SLIDE_W - 1.5,
+        h: 0.5,
+        fontSize: 15,
+        color: "6B7280",
+        align: "center",
+      });
+    }
+
+    if (page.first) {
+      slide.addText(result.note, {
+        x: 0.55,
+        y: 6.93,
+        w: SLIDE_W - 1.1,
+        h: 0.3,
+        fontSize: 8,
+        color: "6B7280",
+        margin: 0,
+        fit: "shrink",
+      });
+    }
+  });
+}
+
+export function addWorkforceRiskSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "risk" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = pres.addSlide();
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  addHeader(slide, result.title, primary, secondary);
+
+  const margin = 0.48;
+  const gap = 0.16;
+  const cardY = 1.15;
+  const cardH = 1.28;
+  const cardW = (SLIDE_W - margin * 2 - gap * 3) / 4;
+
+  result.indicators.forEach((indicator, index) => {
+    const x = margin + index * (cardW + gap);
+    slide.addShape("roundRect", {
+      x,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      fill: { color: "F7F8F7" },
+      line: { color: "E2E5E3", pt: 0.6 },
+      rectRadius: 0.05,
+    });
+    slide.addShape("rect", {
+      x,
+      y: cardY,
+      w: 0.08,
+      h: cardH,
+      fill: { color: index === 2 ? secondaryColor : primaryColor },
+      line: { color: index === 2 ? secondaryColor : primaryColor, transparency: 100 },
+    });
+    slide.addText(String(indicator.value), {
+      x: x + 0.24,
+      y: cardY + 0.16,
+      w: 0.7,
+      h: 0.43,
+      fontSize: 23,
+      bold: true,
+      color: primaryColor,
+      margin: 0,
+    });
+    slide.addText(`${indicator.percentage.toFixed(1)}%`, {
+      x: x + 0.9,
+      y: cardY + 0.24,
+      w: 0.75,
+      h: 0.25,
+      fontSize: 11,
+      bold: true,
+      color: "5B6661",
+      margin: 0,
+    });
+    slide.addText(indicator.label, {
+      x: x + 0.24,
+      y: cardY + 0.66,
+      w: cardW - 0.45,
+      h: 0.22,
+      fontSize: 10.5,
+      bold: true,
+      color: "273036",
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(`${indicator.definition} · ${indicator.denominator} records`, {
+      x: x + 0.24,
+      y: cardY + 0.94,
+      w: cardW - 0.45,
+      h: 0.18,
+      fontSize: 7.8,
+      color: "6B7280",
+      margin: 0,
+      fit: "shrink",
+    });
+  });
+
+  const heatX = margin;
+  const heatY = 2.66;
+  const heatW = 7.62;
+  const heatH = 3.96;
+  slide.addShape("roundRect", {
+    x: heatX,
+    y: heatY,
+    w: heatW,
+    h: heatH,
+    fill: { color: "FFFFFF" },
+    line: { color: "E2E5E3", pt: 0.7 },
+    rectRadius: 0.05,
+  });
+  slide.addText("Age × tenure concentration", {
+    x: heatX + 0.24,
+    y: heatY + 0.17,
+    w: 2.8,
+    h: 0.24,
+    fontSize: 12,
+    bold: true,
+    color: "273036",
+    margin: 0,
+  });
+  slide.addText(`${result.completeRecords} of ${result.totalEmployees} employees have both dates`, {
+    x: heatX + 0.24,
+    y: heatY + 0.47,
+    w: 3.2,
+    h: 0.17,
+    fontSize: 8,
+    color: "6B7280",
+    margin: 0,
+  });
+  slide.addText("Darker cells = more employees", {
+    x: heatX + heatW - 2.18,
+    y: heatY + 0.24,
+    w: 1.92,
+    h: 0.17,
+    fontSize: 7.7,
+    color: "6B7280",
+    align: "right",
+    margin: 0,
+  });
+
+  const labelW = 0.8;
+  const cellGap = 0.08;
+  const gridX = heatX + 0.28 + labelW;
+  const gridY = heatY + 1.02;
+  const gridW = heatW - 0.56 - labelW;
+  const cellW = (gridW - cellGap * (result.tenureBands.length - 1)) / result.tenureBands.length;
+  const cellH = 0.4;
+  const rowGap = 0.07;
+  const maximumCell = Math.max(0, ...result.cells.map((cell) => cell.count));
+
+  slide.addText("AGE", {
+    x: heatX + 0.25,
+    y: gridY - 0.35,
+    w: labelW,
+    h: 0.18,
+    fontSize: 7.5,
+    bold: true,
+    color: "8A918D",
+    charSpacing: 0.7,
+    margin: 0,
+  });
+  result.tenureBands.forEach((tenureBand, columnIndex) => {
+    slide.addText(tenureBand, {
+      x: gridX + columnIndex * (cellW + cellGap),
+      y: gridY - 0.35,
+      w: cellW,
+      h: 0.18,
+      fontSize: 8,
+      bold: true,
+      color: "5B6661",
+      align: "center",
+      margin: 0,
+    });
+  });
+
+  result.ageBands.forEach((ageBand, rowIndex) => {
+    const y = gridY + rowIndex * (cellH + rowGap);
+    slide.addText(ageBand, {
+      x: heatX + 0.25,
+      y: y + 0.09,
+      w: labelW - 0.08,
+      h: 0.18,
+      fontSize: 8.5,
+      bold: true,
+      color: "5B6661",
+      margin: 0,
+    });
+
+    result.tenureBands.forEach((tenureBand, columnIndex) => {
+      const count =
+        result.cells.find(
+          (cell) => cell.ageBand === ageBand && cell.tenureBand === tenureBand
+        )?.count ?? 0;
+      const ratio = maximumCell ? count / maximumCell : 0;
+      const fill = count === 0 ? "F3F4F3" : mixWithWhite(primaryColor, 0.22 + ratio * 0.78);
+      slide.addShape("roundRect", {
+        x: gridX + columnIndex * (cellW + cellGap),
+        y,
+        w: cellW,
+        h: cellH,
+        fill: { color: fill },
+        line: { color: fill, transparency: 100 },
+        rectRadius: 0.03,
+      });
+      slide.addText(String(count), {
+        x: gridX + columnIndex * (cellW + cellGap),
+        y: y + 0.07,
+        w: cellW,
+        h: 0.22,
+        fontSize: 9.5,
+        bold: true,
+        color: ratio >= 0.5 ? "FFFFFF" : "273036",
+        align: "center",
+        margin: 0,
+      });
+    });
+  });
+
+  const insightX = 8.3;
+  const insightW = SLIDE_W - insightX - margin;
+  slide.addShape("roundRect", {
+    x: insightX,
+    y: heatY,
+    w: insightW,
+    h: heatH,
+    fill: { color: "F7F8F7" },
+    line: { color: "E2E5E3", pt: 0.7 },
+    rectRadius: 0.05,
+  });
+  slide.addText("PLANNING OBSERVATIONS", {
+    x: insightX + 0.28,
+    y: heatY + 0.22,
+    w: insightW - 0.56,
+    h: 0.2,
+    fontSize: 8.5,
+    bold: true,
+    color: "7A827E",
+    charSpacing: 0.8,
+    margin: 0,
+  });
+
+  result.observations.forEach((observation, index) => {
+    const y = heatY + 0.66 + index * 0.88;
+    slide.addShape("ellipse", {
+      x: insightX + 0.28,
+      y,
+      w: 0.28,
+      h: 0.28,
+      fill: { color: primaryColor },
+      line: { color: primaryColor, transparency: 100 },
+    });
+    slide.addText(String(index + 1), {
+      x: insightX + 0.28,
+      y: y + 0.055,
+      w: 0.28,
+      h: 0.14,
+      fontSize: 7,
+      bold: true,
+      color: "FFFFFF",
+      align: "center",
+      margin: 0,
+    });
+    slide.addText(observation, {
+      x: insightX + 0.7,
+      y: y - 0.02,
+      w: insightW - 1,
+      h: 0.65,
+      fontSize: 8.8,
+      color: "4B5563",
+      margin: 0,
+      breakLine: false,
+      fit: "shrink",
+      valign: "top",
+    });
+  });
+
+  slide.addShape("line", {
+    x: insightX + 0.28,
+    y: heatY + heatH - 0.72,
+    w: insightW - 0.56,
+    h: 0,
+    line: { color: "DDE0DE", pt: 0.7 },
+  });
+  slide.addText(result.note, {
+    x: insightX + 0.28,
+    y: heatY + heatH - 0.58,
+    w: insightW - 0.56,
+    h: 0.42,
+    fontSize: 7.4,
+    color: "6B7280",
+    margin: 0,
+    fit: "shrink",
+  });
+
+  slide.addText(
+    `Data coverage: birth dates ${result.birthDateRecords}/${result.totalEmployees} · hire dates ${result.hireDateRecords}/${result.totalEmployees} · both ${result.completeRecords}/${result.totalEmployees}`,
+    {
+      x: margin,
+      y: 6.84,
+      w: SLIDE_W - margin * 2,
+      h: 0.2,
+      fontSize: 8,
+      color: "6B7280",
+      margin: 0,
+      align: "center",
+    }
+  );
+}
+
+export function addDataQualitySlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "quality" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = pres.addSlide();
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  const warningColor = "D97706";
+  addHeader(slide, result.title, primary, secondary);
+
+  const validZipPercentage = result.totalEmployees
+    ? (result.validZipRecords / result.totalEmployees) * 100
+    : 0;
+  const completeRecordPercentage = result.totalEmployees
+    ? (result.completeRecords / result.totalEmployees) * 100
+    : 0;
+  const matchPercentage = result.activeElections
+    ? (result.matchedElections / result.activeElections) * 100
+    : null;
+  const metrics = [
+    {
+      label: "Core census completeness",
+      value: `${result.censusCompleteness.toFixed(1)}%`,
+      detail: "Birth date, hire date, ZIP, and salary",
+      color: primaryColor,
+    },
+    {
+      label: "Valid ZIP coverage",
+      value: `${validZipPercentage.toFixed(1)}%`,
+      detail: `${result.validZipRecords} of ${result.totalEmployees} employees mapped`,
+      color: primaryColor,
+    },
+    {
+      label: "Unmatched elections",
+      value: String(result.unmatchedElections),
+      detail:
+        matchPercentage === null
+          ? "No active elections to match"
+          : `${matchPercentage.toFixed(1)}% rate-row match coverage`,
+      color: result.unmatchedElections > 0 ? warningColor : primaryColor,
+    },
+    {
+      label: "Fully complete records",
+      value: `${completeRecordPercentage.toFixed(1)}%`,
+      detail: `${result.completeRecords} of ${result.totalEmployees} employees`,
+      color: primaryColor,
+    },
+  ];
+
+  const margin = 0.48;
+  const gap = 0.16;
+  const cardY = 1.15;
+  const cardH = 1.3;
+  const cardW = (SLIDE_W - margin * 2 - gap * 3) / 4;
+  metrics.forEach((metric, index) => {
+    const x = margin + index * (cardW + gap);
+    slide.addShape("roundRect", {
+      x,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      fill: { color: "F7F8F7" },
+      line: { color: "E2E5E3", pt: 0.6 },
+      rectRadius: 0.05,
+    });
+    slide.addShape("rect", {
+      x,
+      y: cardY,
+      w: 0.08,
+      h: cardH,
+      fill: { color: index === 1 ? secondaryColor : metric.color },
+      line: { color: index === 1 ? secondaryColor : metric.color, transparency: 100 },
+    });
+    slide.addText(metric.value, {
+      x: x + 0.24,
+      y: cardY + 0.17,
+      w: cardW - 0.48,
+      h: 0.42,
+      fontSize: 23,
+      bold: true,
+      color: metric.color,
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(metric.label, {
+      x: x + 0.24,
+      y: cardY + 0.68,
+      w: cardW - 0.48,
+      h: 0.2,
+      fontSize: 10.5,
+      bold: true,
+      color: "273036",
+      margin: 0,
+      fit: "shrink",
+    });
+    slide.addText(metric.detail, {
+      x: x + 0.24,
+      y: cardY + 0.98,
+      w: cardW - 0.48,
+      h: 0.17,
+      fontSize: 7.8,
+      color: "6B7280",
+      margin: 0,
+      fit: "shrink",
+    });
+  });
+
+  const panelY = 2.7;
+  const panelH = 3.92;
+  const auditX = margin;
+  const auditW = 6.35;
+  slide.addShape("roundRect", {
+    x: auditX,
+    y: panelY,
+    w: auditW,
+    h: panelH,
+    fill: { color: "FFFFFF" },
+    line: { color: "E2E5E3", pt: 0.7 },
+    rectRadius: 0.05,
+  });
+  slide.addText("CENSUS FIELD AUDIT", {
+    x: auditX + 0.3,
+    y: panelY + 0.25,
+    w: auditW - 0.6,
+    h: 0.2,
+    fontSize: 8.5,
+    bold: true,
+    color: "7A827E",
+    charSpacing: 0.8,
+    margin: 0,
+  });
+  slide.addText("Field", {
+    x: auditX + 0.3,
+    y: panelY + 0.67,
+    w: 1.6,
+    h: 0.18,
+    fontSize: 8,
+    bold: true,
+    color: "6B7280",
+    margin: 0,
+  });
+  slide.addText("Complete / missing", {
+    x: auditX + 2.1,
+    y: panelY + 0.67,
+    w: 1.45,
+    h: 0.18,
+    fontSize: 8,
+    bold: true,
+    color: "6B7280",
+    margin: 0,
+    align: "center",
+  });
+  slide.addText("Coverage", {
+    x: auditX + 4.05,
+    y: panelY + 0.67,
+    w: 1.75,
+    h: 0.18,
+    fontSize: 8,
+    bold: true,
+    color: "6B7280",
+    margin: 0,
+    align: "center",
+  });
+
+  result.fields.forEach((field, index) => {
+    const y = panelY + 1.02 + index * 0.68;
+    if (index > 0) {
+      slide.addShape("line", {
+        x: auditX + 0.3,
+        y: y - 0.14,
+        w: auditW - 0.6,
+        h: 0,
+        line: { color: "EBEDEB", pt: 0.5 },
+      });
+    }
+    slide.addText(field.label, {
+      x: auditX + 0.3,
+      y,
+      w: 1.6,
+      h: 0.22,
+      fontSize: 10,
+      bold: true,
+      color: "273036",
+      margin: 0,
+    });
+    slide.addText(`${field.complete} / ${field.missing}`, {
+      x: auditX + 2.1,
+      y,
+      w: 1.45,
+      h: 0.22,
+      fontSize: 9.5,
+      color: "4B5563",
+      align: "center",
+      margin: 0,
+    });
+    const barX = auditX + 3.82;
+    const barY = y + 0.03;
+    const barW = 1.45;
+    slide.addShape("roundRect", {
+      x: barX,
+      y: barY,
+      w: barW,
+      h: 0.14,
+      fill: { color: "E5E7EB" },
+      line: { color: "E5E7EB", transparency: 100 },
+      rectRadius: 0.03,
+    });
+    if (field.coverage > 0) {
+      slide.addShape("roundRect", {
+        x: barX,
+        y: barY,
+        w: barW * Math.min(1, field.coverage / 100),
+        h: 0.14,
+        fill: { color: primaryColor },
+        line: { color: primaryColor, transparency: 100 },
+        rectRadius: 0.03,
+      });
+    }
+    slide.addText(`${field.coverage.toFixed(1)}%`, {
+      x: auditX + 5.38,
+      y,
+      w: 0.58,
+      h: 0.2,
+      fontSize: 8.5,
+      bold: true,
+      color: "4B5563",
+      align: "right",
+      margin: 0,
+    });
+  });
+
+  const findingX = 7.06;
+  const findingW = SLIDE_W - findingX - margin;
+  slide.addShape("roundRect", {
+    x: findingX,
+    y: panelY,
+    w: findingW,
+    h: panelH,
+    fill: { color: "F7F8F7" },
+    line: { color: "E2E5E3", pt: 0.7 },
+    rectRadius: 0.05,
+  });
+  slide.addText("QUALITY FINDINGS", {
+    x: findingX + 0.3,
+    y: panelY + 0.25,
+    w: findingW - 0.6,
+    h: 0.2,
+    fontSize: 8.5,
+    bold: true,
+    color: "7A827E",
+    charSpacing: 0.8,
+    margin: 0,
+  });
+  result.findings.forEach((finding, index) => {
+    const y = panelY + 0.75 + index * 0.9;
+    slide.addShape("ellipse", {
+      x: findingX + 0.3,
+      y,
+      w: 0.28,
+      h: 0.28,
+      fill: { color: index === 2 && result.unmatchedElections > 0 ? warningColor : primaryColor },
+      line: {
+        color: index === 2 && result.unmatchedElections > 0 ? warningColor : primaryColor,
+        transparency: 100,
+      },
+    });
+    slide.addText(String(index + 1), {
+      x: findingX + 0.3,
+      y: y + 0.055,
+      w: 0.28,
+      h: 0.14,
+      fontSize: 7,
+      bold: true,
+      color: "FFFFFF",
+      align: "center",
+      margin: 0,
+    });
+    slide.addText(finding, {
+      x: findingX + 0.72,
+      y: y - 0.02,
+      w: findingW - 1.05,
+      h: 0.63,
+      fontSize: 9.2,
+      color: "4B5563",
+      margin: 0,
+      fit: "shrink",
+      valign: "top",
+    });
+  });
+
+  slide.addText(result.note, {
+    x: margin,
+    y: 6.84,
+    w: SLIDE_W - margin * 2,
+    h: 0.31,
+    fontSize: 7.5,
+    color: "6B7280",
+    align: "center",
     margin: 0,
     fit: "shrink",
   });
@@ -692,8 +1509,12 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     const result = compute(dataset);
 
     if (result.kind === "executive") addExecutiveSummarySlide(pres, result, primary, secondary);
+    else if (result.kind === "risk") addWorkforceRiskSlide(pres, result, primary, secondary);
+    else if (result.kind === "quality") addDataQualitySlide(pres, result, primary, secondary);
     else if (result.kind === "participation")
       addBenefitsParticipationSlide(pres, result, primary, secondary);
+    else if (result.kind === "contribution")
+      addContributionStrategySlides(pres, result, primary, secondary);
     else if (result.kind === "stats") addStatsSlide(pres, result, primary, secondary);
     else if (result.kind === "bar") addBarSlide(pres, result, primary, secondary);
     else if (result.kind === "pie") addPieSlide(pres, result, primary, secondary);

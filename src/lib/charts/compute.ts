@@ -49,6 +49,22 @@ const TENURE_BANDS: [string, number, number][] = [
   ["10+ yrs", 10, Infinity],
 ];
 
+const RISK_AGE_BANDS: [string, number, number][] = [
+  ["<35", 0, 35],
+  ["35-44", 35, 45],
+  ["45-54", 45, 55],
+  ["55-59", 55, 60],
+  ["60-64", 60, 65],
+  ["65+", 65, Infinity],
+];
+
+const RISK_TENURE_BANDS: [string, number, number][] = [
+  ["<1 yr", 0, 1],
+  ["1-4 yrs", 1, 5],
+  ["5-9 yrs", 5, 10],
+  ["10+ yrs", 10, Infinity],
+];
+
 function bandFor(value: number, bands: [string, number, number][]): string {
   const found = bands.find(([, min, max]) => value >= min && value < max);
   return found ? found[0] : bands[bands.length - 1][0];
@@ -61,14 +77,20 @@ function isWaived(el: Election): boolean {
 // Carrier exports abbreviate tiers inconsistently (e.g. "EE/SP", "EE/CH",
 // "Employee + Spouse"), so match both spelled-out words and the common
 // delimiter-prefixed abbreviations rather than requiring exact substrings.
-function tierFromOption(optionName: string | null): string {
+type TierCode = keyof typeof TIER_LABELS;
+
+function tierCodeFromOption(optionName: string | null): TierCode {
   const text = (optionName ?? "").toLowerCase();
   const hasSpouse = /spouse|[/+\- ]sp\b/.test(text);
   const hasChild = /child|[/+\- ]ch\b/.test(text);
   if (text.includes("family") || (hasSpouse && hasChild)) return "Family";
-  if (hasSpouse) return "Employee + Spouse";
-  if (hasChild) return "Employee + Child";
-  return "Employee";
+  if (hasSpouse) return "EE+Spouse";
+  if (hasChild) return "EE+Child";
+  return "EE";
+}
+
+function tierFromOption(optionName: string | null): string {
+  return TIER_LABELS[tierCodeFromOption(optionName)];
 }
 
 function isSpouseRelationship(relationshipType: string | null | undefined): boolean {
@@ -79,6 +101,10 @@ function isSpouseRelationship(relationshipType: string | null | undefined): bool
 function pct(count: number, total: number): string {
   if (total === 0) return "0%";
   return `${((count / total) * 100).toFixed(1)}%`;
+}
+
+function percentage(count: number, total: number): number {
+  return total === 0 ? 0 : (count / total) * 100;
 }
 
 function largestBand(values: number[], bands: [string, number, number][]) {
@@ -211,6 +237,116 @@ function computeExecutiveSummary(ds: ChartDataset): ChartResult {
       },
     ],
     observations,
+  };
+}
+
+function computeWorkforceRiskProfile(ds: ChartDataset): ChartResult {
+  const ageRecords = ds.employees
+    .map((employee) => ({
+      employee,
+      age: ageInYears(employee.birthDate, ds.effectiveDate),
+    }))
+    .filter((record): record is { employee: Employee; age: number } =>
+      record.age !== null && record.age >= 0
+    );
+  const tenureRecords = ds.employees
+    .map((employee) => ({
+      employee,
+      tenure: tenureInYears(employee.hireDate, ds.effectiveDate),
+    }))
+    .filter((record): record is { employee: Employee; tenure: number } =>
+      record.tenure !== null && record.tenure >= 0
+    );
+  const combinedRecords = ds.employees.flatMap((employee) => {
+    const age = ageInYears(employee.birthDate, ds.effectiveDate);
+    const tenure = tenureInYears(employee.hireDate, ds.effectiveDate);
+    return age !== null && age >= 0 && tenure !== null && tenure >= 0
+      ? [{ age, tenure }]
+      : [];
+  });
+
+  const newHires = tenureRecords.filter(({ tenure }) => tenure < 1).length;
+  const established = tenureRecords.filter(({ tenure }) => tenure >= 5).length;
+  const medicareHorizon = ageRecords.filter(({ age }) => age >= 60 && age < 65).length;
+  const continuityExposure = combinedRecords.filter(
+    ({ age, tenure }) => age >= 60 && tenure >= 10
+  ).length;
+  const age65Plus = ageRecords.filter(({ age }) => age >= 65).length;
+
+  const cells = RISK_AGE_BANDS.flatMap(([ageBand]) =>
+    RISK_TENURE_BANDS.map(([tenureBand]) => ({ ageBand, tenureBand, count: 0 }))
+  );
+  for (const { age, tenure } of combinedRecords) {
+    const ageBand = bandFor(age, RISK_AGE_BANDS);
+    const tenureBand = bandFor(tenure, RISK_TENURE_BANDS);
+    cells.find(
+      (cell) => cell.ageBand === ageBand && cell.tenureBand === tenureBand
+    )!.count++;
+  }
+
+  const newHirePercentage = percentage(newHires, tenureRecords.length);
+  const establishedPercentage = percentage(established, tenureRecords.length);
+  const medicareHorizonPercentage = percentage(medicareHorizon, ageRecords.length);
+  const continuityPercentage = percentage(continuityExposure, combinedRecords.length);
+
+  const observations = [
+    tenureRecords.length
+      ? `${newHires} new hire${newHires === 1 ? "" : "s"} (${newHirePercentage.toFixed(1)}%) and ${established} established employee${established === 1 ? "" : "s"} (${establishedPercentage.toFixed(1)}%) show the current balance between onboarding and retained experience.`
+      : "New-hire and established-workforce indicators are unavailable because hire dates are missing.",
+    ageRecords.length
+      ? `${medicareHorizon} employee${medicareHorizon === 1 ? " is" : "s are"} age 60–64, while ${age65Plus} ${age65Plus === 1 ? "is" : "are"} age 65 or older.`
+      : "Age-horizon indicators are unavailable because birth dates are missing.",
+    combinedRecords.length
+      ? `${continuityExposure} employee${continuityExposure === 1 ? "" : "s"} (${continuityPercentage.toFixed(1)}%) combine age 60+ with 10+ years of service, highlighting where continuity planning may have the greatest value.`
+      : "Continuity exposure is unavailable because no employee records contain both birth and hire dates.",
+  ];
+
+  return {
+    kind: "risk",
+    title: "Workforce Risk & Continuity Profile",
+    indicators: [
+      {
+        key: "new-hires",
+        label: "New hires",
+        value: newHires,
+        percentage: newHirePercentage,
+        denominator: tenureRecords.length,
+        definition: "Less than 1 year of service",
+      },
+      {
+        key: "established",
+        label: "Established workforce",
+        value: established,
+        percentage: establishedPercentage,
+        denominator: tenureRecords.length,
+        definition: "5 or more years of service",
+      },
+      {
+        key: "medicare-horizon",
+        label: "Medicare horizon",
+        value: medicareHorizon,
+        percentage: medicareHorizonPercentage,
+        denominator: ageRecords.length,
+        definition: "Age 60–64",
+      },
+      {
+        key: "continuity-exposure",
+        label: "Continuity exposure",
+        value: continuityExposure,
+        percentage: continuityPercentage,
+        denominator: combinedRecords.length,
+        definition: "Age 60+ and 10+ years of service",
+      },
+    ],
+    ageBands: RISK_AGE_BANDS.map(([label]) => label),
+    tenureBands: RISK_TENURE_BANDS.map(([label]) => label),
+    cells,
+    birthDateRecords: ageRecords.length,
+    hireDateRecords: tenureRecords.length,
+    completeRecords: combinedRecords.length,
+    totalEmployees: ds.employees.length,
+    observations,
+    note: "Planning indicators use recorded birth and hire dates and do not predict retirement or individual Medicare eligibility. Percentages use records with the required dates.",
   };
 }
 
@@ -752,6 +888,211 @@ function computeEmployerEmployeeCostSplit(ds: ChartDataset): ChartResult {
   };
 }
 
+function normalizedMatchKey(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function annualizationFactor(ratePeriod: string): number {
+  if (ratePeriod === "monthly") return 12;
+  if (ratePeriod === "per-pay-period") return 26;
+  if (ratePeriod === "annual") return 1;
+  return 0;
+}
+
+function computeContributionStrategy(
+  ds: ChartDataset
+): Extract<ChartResult, { kind: "contribution" }> {
+  const rows = ds.policyLines.map((line) => {
+    const employeeRate = Number(line.employeeCost);
+    const employerRate = Number(line.employerCost);
+    const totalRate = employeeRate + employerRate;
+    return {
+      benefit: line.coverageType,
+      plan: line.planName,
+      tierCode: line.tier,
+      tier: TIER_LABELS[line.tier as TierCode] ?? line.tier,
+      enrolled: 0,
+      employeeRate,
+      employerRate,
+      employerPaidPercentage: totalRate ? (employerRate / totalRate) * 100 : 0,
+      ratePeriod: line.ratePeriod,
+      annualEmployeeSpend: 0,
+      annualEmployerSpend: 0,
+      annualTotalSpend: 0,
+    };
+  });
+
+  let totalElections = 0;
+  let matchedElections = 0;
+
+  for (const employee of ds.employees) {
+    const electionsByBenefit = new Map<string, Election[]>();
+    for (const election of employee.elections) {
+      const benefitKey = normalizedMatchKey(election.benefitType);
+      const elections = electionsByBenefit.get(benefitKey) ?? [];
+      elections.push(election);
+      electionsByBenefit.set(benefitKey, elections);
+    }
+
+    for (const elections of electionsByBenefit.values()) {
+      const election = elections.find((item) => !isWaived(item));
+      if (!election) continue;
+      totalElections++;
+
+      const benefitKey = normalizedMatchKey(election.benefitType);
+      const tierCode = tierCodeFromOption(election.optionName);
+      const tierCandidates = rows.filter(
+        (row) =>
+          normalizedMatchKey(row.benefit) === benefitKey && row.tierCode === tierCode
+      );
+      const planKey = normalizedMatchKey(election.planName);
+      const exactPlanCandidates = planKey
+        ? tierCandidates.filter((row) => normalizedMatchKey(row.plan) === planKey)
+        : [];
+
+      let matchedRow: (typeof rows)[number] | undefined;
+      if (exactPlanCandidates.length === 1) matchedRow = exactPlanCandidates[0];
+      else if (tierCandidates.length === 1) matchedRow = tierCandidates[0];
+
+      if (!matchedRow) continue;
+      matchedRow.enrolled++;
+      matchedElections++;
+    }
+  }
+
+  for (const row of rows) {
+    const factor = annualizationFactor(row.ratePeriod);
+    row.annualEmployeeSpend = row.employeeRate * factor * row.enrolled;
+    row.annualEmployerSpend = row.employerRate * factor * row.enrolled;
+    row.annualTotalSpend = row.annualEmployeeSpend + row.annualEmployerSpend;
+  }
+
+  const annualEmployeeSpend = rows.reduce(
+    (sum, row) => sum + row.annualEmployeeSpend,
+    0
+  );
+  const annualEmployerSpend = rows.reduce(
+    (sum, row) => sum + row.annualEmployerSpend,
+    0
+  );
+
+  return {
+    kind: "contribution",
+    title: "Employer vs. Employee Cost Strategy",
+    rows: rows.map((row) => ({
+      benefit: row.benefit,
+      plan: row.plan,
+      tier: row.tier,
+      enrolled: row.enrolled,
+      employeeRate: row.employeeRate,
+      employerRate: row.employerRate,
+      employerPaidPercentage: row.employerPaidPercentage,
+      ratePeriod: row.ratePeriod,
+      annualEmployeeSpend: row.annualEmployeeSpend,
+      annualEmployerSpend: row.annualEmployerSpend,
+      annualTotalSpend: row.annualTotalSpend,
+    })),
+    annualEmployeeSpend,
+    annualEmployerSpend,
+    annualTotalSpend: annualEmployeeSpend + annualEmployerSpend,
+    matchedElections,
+    totalElections,
+    note: `Annual estimates use enrolled elections matched by benefit, plan, and tier. Monthly rates are multiplied by 12; per-pay-period rates assume 26 pay periods; annual rates are used as entered.${totalElections > matchedElections ? ` ${totalElections - matchedElections} active election${totalElections - matchedElections === 1 ? " was" : "s were"} not matched to a rate row.` : ""}`,
+  };
+}
+
+function computeDataQualityAppendix(
+  ds: ChartDataset
+): Extract<ChartResult, { kind: "quality" }> {
+  const totalEmployees = ds.employees.length;
+  const fieldDefinitions = [
+    {
+      key: "birth-date" as const,
+      label: "Birth date",
+      isComplete: (employee: Employee) => employee.birthDate !== null,
+    },
+    {
+      key: "hire-date" as const,
+      label: "Hire date",
+      isComplete: (employee: Employee) => employee.hireDate !== null,
+    },
+    {
+      key: "zip" as const,
+      label: "ZIP code",
+      isComplete: (employee: Employee) => Boolean(employee.postalCode?.trim()),
+    },
+    {
+      key: "salary" as const,
+      label: "Base salary",
+      isComplete: (employee: Employee) => employee.baseSalary !== null,
+    },
+  ];
+
+  const fields = fieldDefinitions.map((field) => {
+    const complete = ds.employees.filter(field.isComplete).length;
+    return {
+      key: field.key,
+      label: field.label,
+      complete,
+      missing: totalEmployees - complete,
+      coverage: percentage(complete, totalEmployees),
+    };
+  });
+  const completedFieldValues = fields.reduce((sum, field) => sum + field.complete, 0);
+  const censusCompleteness = percentage(
+    completedFieldValues,
+    totalEmployees * fieldDefinitions.length
+  );
+  const completeRecords = ds.employees.filter((employee) =>
+    fieldDefinitions.every((field) => field.isComplete(employee))
+  ).length;
+  const recordedZipRecords = ds.employees.filter((employee) =>
+    Boolean(employee.postalCode?.trim())
+  ).length;
+  const validZipRecords = ds.employees.filter((employee) =>
+    Boolean(lookupPostalGeography(employee.postalCode))
+  ).length;
+
+  const contribution = computeContributionStrategy(ds);
+  const unmatchedElections = contribution.totalElections - contribution.matchedElections;
+  const largestGap = [...fields].sort((a, b) => b.missing - a.missing)[0];
+  const invalidRecordedZips = recordedZipRecords - validZipRecords;
+
+  const findings = [
+    totalEmployees === 0
+      ? "No employee census records are available to audit."
+      : largestGap.missing === 0
+        ? "Birth date, hire date, ZIP, and salary are present for every employee."
+        : `${largestGap.label} has the largest completion gap: ${largestGap.missing} of ${totalEmployees} employee records are missing it.`,
+    totalEmployees === 0
+      ? "ZIP coverage is unavailable without employee records."
+      : invalidRecordedZips > 0
+        ? `${validZipRecords} of ${totalEmployees} employees have a mappable ZIP; ${invalidRecordedZips} recorded ZIP${invalidRecordedZips === 1 ? " is" : "s are"} not recognized.`
+        : `${validZipRecords} of ${totalEmployees} employees have a mappable ZIP; ${totalEmployees - recordedZipRecords} ${totalEmployees - recordedZipRecords === 1 ? "record is" : "records are"} missing ZIP data.`,
+    contribution.totalElections === 0
+      ? "No active, non-waived plan elections are available for rate matching."
+      : unmatchedElections === 0
+        ? `All ${contribution.totalElections} active plan elections match a policy rate row.`
+        : `${unmatchedElections} of ${contribution.totalElections} active plan elections do not match a unique policy rate row by benefit, plan, and tier.`,
+  ];
+
+  return {
+    kind: "quality",
+    title: "Data Quality Appendix",
+    totalEmployees,
+    censusCompleteness,
+    completeRecords,
+    validZipRecords,
+    recordedZipRecords,
+    activeElections: contribution.totalElections,
+    matchedElections: contribution.matchedElections,
+    unmatchedElections,
+    fields,
+    findings,
+    note: "Core census completeness measures the presence of birth date, hire date, ZIP code, and base salary. Valid ZIPs must map to the packaged U.S. geography. Election matching uses benefit, plan, and coverage tier; waived elections are excluded.",
+  };
+}
+
 function computeLifeVolumeDistribution(ds: ChartDataset): ChartResult {
   const rows = LIFE_VOLUME_BANDS.map(([label]) => ({ band: label, Employees: 0 }));
   for (const e of ds.employees) {
@@ -771,6 +1112,7 @@ function computeLifeVolumeDistribution(ds: ChartDataset): ChartResult {
 
 export const CHART_COMPUTE: Record<string, (ds: ChartDataset) => ChartResult> = {
   "executive-summary": computeExecutiveSummary,
+  "workforce-risk-profile": computeWorkforceRiskProfile,
   "headcount-stat-tiles": computeHeadcountStatTiles,
   "age-gender-distribution": computeAgeGenderDistribution,
   "demographic-summary": computeDemographicSummary,
@@ -784,6 +1126,7 @@ export const CHART_COMPUTE: Record<string, (ds: ChartDataset) => ChartResult> = 
   "plan-option-enrollment": computePlanOptionEnrollment,
   "waived-coverage-summary": computeWaivedCoverageSummary,
   "premium-summary-table": computePremiumSummaryTable,
+  "contribution-strategy": computeContributionStrategy,
   "ancillary-volume-summary": computeAncillaryVolumeSummary,
   "gender-breakdown": computeGenderBreakdown,
   "employment-status-breakdown": computeEmploymentStatusBreakdown,
@@ -795,4 +1138,5 @@ export const CHART_COMPUTE: Record<string, (ds: ChartDataset) => ChartResult> = 
   "cost-by-coverage-summary": computeCostByCoverageSummary,
   "employer-employee-cost-split": computeEmployerEmployeeCostSplit,
   "life-volume-distribution": computeLifeVolumeDistribution,
+  "data-quality-appendix": computeDataQualityAppendix,
 };

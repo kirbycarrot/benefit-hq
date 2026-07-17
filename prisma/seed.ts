@@ -24,6 +24,13 @@ const CHART_DEFINITIONS = [
     sortOrder: 10,
   },
   {
+    key: "workforce-risk-profile",
+    label: "Workforce Risk & Continuity Profile",
+    description: "New hires, established employees, age and service horizons, and an age-by-tenure concentration heatmap.",
+    category: "demographics",
+    sortOrder: 15,
+  },
+  {
     key: "age-gender-distribution",
     label: "Age & Gender Distribution",
     description: "Employee headcount by age band, split by gender.",
@@ -42,6 +49,7 @@ const CHART_DEFINITIONS = [
     label: "Demographic Summary",
     description: "Average age, % over 55, % over 65, average tenure.",
     category: "demographics",
+    defaultEnabled: false,
     sortOrder: 40,
   },
   {
@@ -49,6 +57,7 @@ const CHART_DEFINITIONS = [
     label: "Tenure Distribution",
     description: "Headcount by years of service, including new-hire percentage.",
     category: "demographics",
+    defaultEnabled: false,
     sortOrder: 50,
   },
   {
@@ -56,6 +65,7 @@ const CHART_DEFINITIONS = [
     label: "New Hire Snapshot",
     description: "Count and percentage of employees hired in the last 12 months.",
     category: "demographics",
+    defaultEnabled: false,
     sortOrder: 60,
   },
   {
@@ -156,10 +166,18 @@ const CHART_DEFINITIONS = [
 
   // Cost
   {
+    key: "contribution-strategy",
+    label: "Employer vs. Employee Cost Strategy",
+    description: "Contribution rates, employer-paid percentage, enrollment, and estimated annual spend by benefit, plan, and tier.",
+    category: "cost",
+    sortOrder: 290,
+  },
+  {
     key: "premium-summary-table",
     label: "Premium Summary by Tier",
     description: "Employee vs. employer cost by coverage type and tier, from entered policy details.",
     category: "cost",
+    defaultEnabled: false,
     sortOrder: 300,
   },
   {
@@ -167,6 +185,7 @@ const CHART_DEFINITIONS = [
     label: "Cost Summary by Coverage Type",
     description: "Total employee, employer, and combined premium rolled up by coverage type.",
     category: "cost",
+    defaultEnabled: false,
     sortOrder: 310,
   },
   {
@@ -174,6 +193,7 @@ const CHART_DEFINITIONS = [
     label: "Employer vs. Employee Cost Split",
     description: "Overall share of total premium paid by the employer vs. employees.",
     category: "cost",
+    defaultEnabled: false,
     sortOrder: 320,
   },
 
@@ -191,6 +211,15 @@ const CHART_DEFINITIONS = [
     description: "Employees grouped by elected basic life insurance volume.",
     category: "ancillary",
     sortOrder: 410,
+  },
+
+  // Appendix
+  {
+    key: "data-quality-appendix",
+    label: "Data Quality Appendix",
+    description: "Census field completeness, valid ZIP coverage, policy-rate matching, and missing dates or salaries.",
+    category: "appendix",
+    sortOrder: 900,
   },
 ];
 

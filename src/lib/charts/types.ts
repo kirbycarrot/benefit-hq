@@ -18,6 +18,71 @@ export type ChartResult =
       }[];
       note: string;
     }
+  | {
+      kind: "contribution";
+      title: string;
+      rows: {
+        benefit: string;
+        plan: string;
+        tier: string;
+        enrolled: number;
+        employeeRate: number;
+        employerRate: number;
+        employerPaidPercentage: number;
+        ratePeriod: string;
+        annualEmployeeSpend: number;
+        annualEmployerSpend: number;
+        annualTotalSpend: number;
+      }[];
+      annualEmployeeSpend: number;
+      annualEmployerSpend: number;
+      annualTotalSpend: number;
+      matchedElections: number;
+      totalElections: number;
+      note: string;
+    }
+  | {
+      kind: "risk";
+      title: string;
+      indicators: {
+        key: "new-hires" | "established" | "medicare-horizon" | "continuity-exposure";
+        label: string;
+        value: number;
+        percentage: number;
+        denominator: number;
+        definition: string;
+      }[];
+      ageBands: string[];
+      tenureBands: string[];
+      cells: { ageBand: string; tenureBand: string; count: number }[];
+      birthDateRecords: number;
+      hireDateRecords: number;
+      completeRecords: number;
+      totalEmployees: number;
+      observations: string[];
+      note: string;
+    }
+  | {
+      kind: "quality";
+      title: string;
+      totalEmployees: number;
+      censusCompleteness: number;
+      completeRecords: number;
+      validZipRecords: number;
+      recordedZipRecords: number;
+      activeElections: number;
+      matchedElections: number;
+      unmatchedElections: number;
+      fields: {
+        key: "birth-date" | "hire-date" | "zip" | "salary";
+        label: string;
+        complete: number;
+        missing: number;
+        coverage: number;
+      }[];
+      findings: string[];
+      note: string;
+    }
   | { kind: "stats"; title: string; stats: { label: string; value: string }[] }
   | {
       kind: "bar";
