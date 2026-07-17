@@ -6,6 +6,10 @@ import { CHART_COMPUTE } from "@/lib/charts/compute";
 import { ChartSelectionScreen } from "@/components/ChartSelectionScreen";
 import { DeckGenerator } from "@/components/DeckGenerator";
 import type { ChartResult } from "@/lib/charts/types";
+import {
+  normalizeCoverageTierViews,
+  type ChartSelection,
+} from "@/lib/charts/viewOptions";
 
 export default async function ChartsPage({
   params,
@@ -25,12 +29,17 @@ export default async function ChartsPage({
   });
 
   const rawSelections =
-    (planYear.deckConfig?.selections as Record<string, { enabled: boolean }> | undefined) ?? {};
-  const initialSelections = Object.fromEntries(
-    chartDefinitions.map((def) => [
-      def.key,
-      rawSelections[def.key]?.enabled ?? def.defaultEnabled,
-    ])
+    (planYear.deckConfig?.selections as Record<string, ChartSelection> | undefined) ?? {};
+  const initialSelections = normalizeCoverageTierViews(
+    Object.fromEntries(
+      chartDefinitions.map((def) => [
+        def.key,
+        {
+          enabled: rawSelections[def.key]?.enabled ?? def.defaultEnabled,
+          params: rawSelections[def.key]?.params,
+        },
+      ])
+    )
   );
 
   let chartResults: Record<string, ChartResult> = {};

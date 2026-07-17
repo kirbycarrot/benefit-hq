@@ -46,7 +46,8 @@ export function renderBarChartSvg(
   result: Extract<ChartResult, { kind: "bar" }>,
   colors: string[],
   width = 1200,
-  height = 560
+  height = 560,
+  options: { valueFormat?: "number" | "currency" } = {}
 ): string {
   const marginLeft = 70;
   const marginRight = 30;
@@ -69,6 +70,15 @@ export function renderBarChartSvg(
   const barW = barsAreaW / result.series.length;
 
   const yFor = (v: number) => marginTop + plotH - (v / max) * plotH;
+  const formatValue = (value: number) =>
+    options.valueFormat === "currency"
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          notation: Math.abs(value) >= 10000 ? "compact" : "standard",
+          maximumFractionDigits: Math.abs(value) >= 10000 ? 1 : 0,
+        }).format(value)
+      : String(Math.round(value));
 
   let gridlines = "";
   let yLabels = "";
@@ -76,7 +86,7 @@ export function renderBarChartSvg(
     const v = (max / gridSteps) * i;
     const y = yFor(v);
     gridlines += `<line x1="${marginLeft}" y1="${y}" x2="${width - marginRight}" y2="${y}" stroke="#e5e7eb" stroke-width="1" />`;
-    yLabels += `<text x="${marginLeft - 10}" y="${y + 4}" text-anchor="end" font-size="15" fill="#6b7280" font-family="${FONT}">${Math.round(v)}</text>`;
+    yLabels += `<text x="${marginLeft - 10}" y="${y + 4}" text-anchor="end" font-size="15" fill="#6b7280" font-family="${FONT}">${esc(formatValue(v))}</text>`;
   }
 
   let bars = "";
@@ -108,6 +118,104 @@ export function renderBarChartSvg(
       legendX += textWidth;
     });
   }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
+    ${gridlines}
+    <line x1="${marginLeft}" y1="${marginTop + plotH}" x2="${width - marginRight}" y2="${marginTop + plotH}" stroke="#9ca3af" stroke-width="1.5" />
+    ${bars}
+    ${yLabels}
+    ${xLabels}
+    ${legend}
+  </svg>`;
+}
+
+export function renderStackedBarChartSvg(
+  result: Extract<ChartResult, { kind: "bar" }>,
+  colors: string[],
+  width = 1200,
+  height = 560,
+  options: { normalize?: boolean; valueFormat?: "number" | "currency" } = {}
+): string {
+  const marginLeft = 90;
+  const marginRight = 30;
+  const marginTop = 20;
+  const marginBottom = 90;
+  const plotW = width - marginLeft - marginRight;
+  const plotH = height - marginTop - marginBottom;
+  const normalized = options.normalize ?? false;
+  const rows = result.data.map((row) => {
+    const total = result.series.reduce(
+      (sum, series) => sum + (Number(row[series.key]) || 0),
+      0
+    );
+    return {
+      row,
+      values: result.series.map((series) => {
+        const value = Number(row[series.key]) || 0;
+        return normalized && total ? (value / total) * 100 : value;
+      }),
+    };
+  });
+  const rawMax = normalized
+    ? 100
+    : Math.max(1, ...rows.map(({ values }) => values.reduce((sum, value) => sum + value, 0)));
+  const max = normalized ? 100 : niceMax(rawMax);
+  const categoryW = plotW / Math.max(1, rows.length);
+  const barW = Math.min(categoryW * 0.62, 190);
+  const yFor = (value: number) => marginTop + plotH - (value / max) * plotH;
+  const formatValue = (value: number) => {
+    if (normalized) return `${Math.round(value)}%`;
+    if (options.valueFormat === "currency") {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        notation: Math.abs(value) >= 10000 ? "compact" : "standard",
+        maximumFractionDigits: Math.abs(value) >= 10000 ? 1 : 0,
+      }).format(value);
+    }
+    return String(Math.round(value));
+  };
+
+  let gridlines = "";
+  let yLabels = "";
+  for (let index = 0; index <= 5; index++) {
+    const value = (max / 5) * index;
+    const y = yFor(value);
+    gridlines += `<line x1="${marginLeft}" y1="${y}" x2="${width - marginRight}" y2="${y}" stroke="#e5e7eb" stroke-width="1" />`;
+    yLabels += `<text x="${marginLeft - 12}" y="${y + 4}" text-anchor="end" font-size="14" fill="#6b7280" font-family="${FONT}">${esc(formatValue(value))}</text>`;
+  }
+
+  let bars = "";
+  let xLabels = "";
+  rows.forEach(({ row, values }, rowIndex) => {
+    const x = marginLeft + rowIndex * categoryW + (categoryW - barW) / 2;
+    let cumulative = 0;
+    values.forEach((value, seriesIndex) => {
+      if (value <= 0) return;
+      const segmentHeight = (value / max) * plotH;
+      const y = yFor(cumulative + value);
+      const color = hex(colors[seriesIndex % colors.length]);
+      bars += `<rect x="${x}" y="${y}" width="${barW}" height="${segmentHeight}" fill="${color}" />`;
+      if (segmentHeight >= 28) {
+        bars += `<text x="${x + barW / 2}" y="${y + segmentHeight / 2 + 5}" text-anchor="middle" font-size="14" font-weight="600" fill="${contrastText(color)}" font-family="${FONT}">${esc(formatValue(value))}</text>`;
+      }
+      cumulative += value;
+    });
+    const labelX = marginLeft + rowIndex * categoryW + categoryW / 2;
+    xLabels += `<text x="${labelX}" y="${marginTop + plotH + 25}" text-anchor="middle" font-size="15" fill="#374151" font-family="${FONT}">${esc(String(row[result.xKey]))}</text>`;
+  });
+
+  const legendY = height - 28;
+  let legendX = marginLeft;
+  let legend = "";
+  result.series.forEach((series, index) => {
+    const color = hex(colors[index % colors.length]);
+    const textWidth = series.label.length * 8 + 34;
+    legend += `<rect x="${legendX}" y="${legendY - 12}" width="14" height="14" fill="${color}" />`;
+    legend += `<text x="${legendX + 20}" y="${legendY}" font-size="14" fill="#374151" font-family="${FONT}">${esc(series.label)}</text>`;
+    legendX += textWidth;
+  });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />

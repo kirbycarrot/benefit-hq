@@ -3,11 +3,31 @@ import PptxGenJS from "pptxgenjs";
 import { prisma } from "@/lib/prisma";
 import { loadChartDataset } from "@/lib/charts/dataset";
 import { CHART_COMPUTE } from "@/lib/charts/compute";
-import { renderBarChartSvg, renderPieChartSvg, svgToPng } from "@/lib/charts/svgRender";
+import {
+  renderBarChartSvg,
+  renderPieChartSvg,
+  renderStackedBarChartSvg,
+  svgToPng,
+} from "@/lib/charts/svgRender";
 import { renderWorkforceMapSvg } from "@/lib/geography/mapRender";
 import { generateCaption } from "@/lib/deck/captions";
 import { formatDate } from "@/lib/date";
 import type { ChartResult } from "@/lib/charts/types";
+import {
+  chartView,
+  COVERAGE_TIER_KEYS,
+  type ChartSelection,
+} from "@/lib/charts/viewOptions";
+import {
+  contributionBarResult,
+  geographyBarResult,
+  geographyTableResult,
+  participationBarResult,
+  participationTableResult,
+  renewalBarResult,
+  tierCombinedBarResult,
+  tierTableResult,
+} from "@/lib/charts/viewTransforms";
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
@@ -1501,12 +1521,49 @@ function addBarSlide(
   pres: PptxGenJS,
   result: Extract<ChartResult, { kind: "bar" }>,
   primary: string,
-  secondary: string
+  secondary: string,
+  options: { valueFormat?: "number" | "currency" } = {}
 ) {
   const slide = pres.addSlide();
   addHeader(slide, result.title, primary, secondary);
 
-  const svg = renderBarChartSvg(result, paletteFor(primary, secondary), 1200, 560);
+  const svg = renderBarChartSvg(
+    result,
+    paletteFor(primary, secondary),
+    1200,
+    560,
+    options
+  );
+  const png = svgToPng(svg);
+  const imgH = SLIDE_H - 2.3;
+  slide.addImage({
+    data: `image/png;base64,${png.toString("base64")}`,
+    x: 0.6,
+    y: 1.2,
+    w: SLIDE_W - 1.2,
+    h: imgH,
+  });
+
+  addCaption(slide, generateCaption(result), 1.2 + imgH + 0.1);
+}
+
+function addStackedBarSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "bar" }>,
+  primary: string,
+  secondary: string,
+  options: { normalize?: boolean; valueFormat?: "number" | "currency" } = {}
+) {
+  const slide = pres.addSlide();
+  addHeader(slide, result.title, primary, secondary);
+
+  const svg = renderStackedBarChartSvg(
+    result,
+    paletteFor(primary, secondary),
+    1200,
+    560,
+    options
+  );
   const png = svgToPng(svg);
   const imgH = SLIDE_H - 2.3;
   slide.addImage({
@@ -1687,10 +1744,11 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
   const defsByKey = new Map(chartDefinitions.map((d) => [d.key, d]));
 
   const selections =
-    (planYear.deckConfig?.selections as Record<string, { enabled: boolean }> | undefined) ?? {};
+    (planYear.deckConfig?.selections as Record<string, ChartSelection> | undefined) ?? {};
 
   const isEnabled = (key: string) =>
     selections[key]?.enabled ?? defsByKey.get(key)?.defaultEnabled ?? false;
+  const selectedView = (key: string) => chartView(key, selections[key]);
 
   const dataset = await loadChartDataset(planYearId);
 
@@ -1764,7 +1822,28 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     const group = keyToGroup.get(def.key);
     if (group && activeGroups.has(group)) {
       const panelResults = group.keys.map((k) => CHART_COMPUTE[k](dataset));
-      addPanelSlide(pres, group.title, panelResults, primary, secondary);
+      if (group.title === "Coverage Tier Enrollment") {
+        const tierResults = panelResults.filter(
+          (result): result is Extract<ChartResult, { kind: "bar" }> =>
+            result.kind === "bar"
+        );
+        const view = selectedView(group.keys[0]);
+        if (view === "table") {
+          addTableSlide(pres, tierTableResult(tierResults), primary, secondary);
+        } else if (view === "stacked") {
+          addStackedBarSlide(
+            pres,
+            tierCombinedBarResult(tierResults),
+            primary,
+            secondary,
+            { normalize: true }
+          );
+        } else {
+          addPanelSlide(pres, group.title, panelResults, primary, secondary);
+        }
+      } else {
+        addPanelSlide(pres, group.title, panelResults, primary, secondary);
+      }
       group.keys.forEach((k) => consumedKeys.add(k));
       continue;
     }
@@ -1774,22 +1853,67 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     const compute = CHART_COMPUTE[def.key];
     if (!compute) continue;
     const result = compute(dataset);
+    const view = selectedView(def.key);
 
     if (result.kind === "executive") addExecutiveSummarySlide(pres, result, primary, secondary);
     else if (result.kind === "risk") addWorkforceRiskSlide(pres, result, primary, secondary);
     else if (result.kind === "quality") addDataQualitySlide(pres, result, primary, secondary);
     else if (result.kind === "renewal") {
-      if (result.available)
-        addRenewalComparisonSlides(pres, result, primary, secondary);
+      if (result.available) {
+        if (view === "bar")
+          addBarSlide(pres, renewalBarResult(result), primary, secondary, {
+            valueFormat: "currency",
+          });
+        else addRenewalComparisonSlides(pres, result, primary, secondary);
+      }
     }
-    else if (result.kind === "participation")
-      addBenefitsParticipationSlide(pres, result, primary, secondary);
-    else if (result.kind === "contribution")
-      addContributionStrategySlides(pres, result, primary, secondary);
+    else if (result.kind === "participation") {
+      if (view === "table")
+        addTableSlide(pres, participationTableResult(result), primary, secondary);
+      else if (view === "stacked")
+        addStackedBarSlide(
+          pres,
+          participationBarResult(result),
+          primary,
+          secondary
+        );
+      else addBenefitsParticipationSlide(pres, result, primary, secondary);
+    }
+    else if (result.kind === "contribution") {
+      if (view === "stacked")
+        addStackedBarSlide(
+          pres,
+          contributionBarResult(result),
+          primary,
+          secondary,
+          { valueFormat: "currency" }
+        );
+      else addContributionStrategySlides(pres, result, primary, secondary);
+    }
     else if (result.kind === "stats") addStatsSlide(pres, result, primary, secondary);
-    else if (result.kind === "bar") addBarSlide(pres, result, primary, secondary);
+    else if (result.kind === "bar") {
+      if (
+        COVERAGE_TIER_KEYS.includes(
+          def.key as (typeof COVERAGE_TIER_KEYS)[number]
+        ) && view === "table"
+      )
+        addTableSlide(pres, tierTableResult([result]), primary, secondary);
+      else if (
+        COVERAGE_TIER_KEYS.includes(
+          def.key as (typeof COVERAGE_TIER_KEYS)[number]
+        ) && view === "stacked"
+      )
+        addStackedBarSlide(pres, result, primary, secondary, { normalize: true });
+      else addBarSlide(pres, result, primary, secondary);
+    }
     else if (result.kind === "pie") addPieSlide(pres, result, primary, secondary);
-    else if (result.kind === "map") addMapSlide(pres, result, primary, secondary);
+    else if (result.kind === "map") {
+      if (view === "bar")
+        addBarSlide(pres, geographyBarResult(result), primary, secondary);
+      else if (view === "table")
+        addTableSlide(pres, geographyTableResult(result), primary, secondary);
+      else addMapSlide(pres, result, primary, secondary);
+    }
     else addTableSlide(pres, result, primary, secondary);
   }
 

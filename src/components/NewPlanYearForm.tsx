@@ -11,8 +11,9 @@ export function NewPlanYearForm({
   currentYear: number;
 }) {
   const router = useRouter();
-  const [label, setLabel] = useState(`${currentYear} Plan Year`);
-  const [effectiveDate, setEffectiveDate] = useState(`${currentYear + 1}-01-01`);
+  const nextYear = currentYear + 1;
+  const [label, setLabel] = useState(`${nextYear} Plan Year`);
+  const [effectiveDate, setEffectiveDate] = useState(`${nextYear}-01-01`);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -59,7 +60,7 @@ export function NewPlanYearForm({
         <input
           type="text"
           required
-          placeholder={`${currentYear} Plan Year`}
+          placeholder={`${nextYear} Plan Year`}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           className="w-full rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none sm:w-auto"

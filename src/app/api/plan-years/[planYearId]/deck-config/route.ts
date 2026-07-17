@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { deckSelectionsSchema } from "@/lib/validation";
 
 export async function PUT(
   request: Request,
@@ -27,15 +28,15 @@ export async function PUT(
   }
 
   const body = await request.json();
-
-  if (typeof body?.selections !== "object" || body.selections === null) {
+  const parsed = deckSelectionsSchema.safeParse(body?.selections);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid selections payload" }, { status: 400 });
   }
 
   const deckConfig = await prisma.deckConfig.upsert({
     where: { planYearId },
-    update: { selections: body.selections },
-    create: { planYearId, selections: body.selections },
+    update: { selections: parsed.data },
+    create: { planYearId, selections: parsed.data },
   });
 
   return NextResponse.json({ id: deckConfig.id });

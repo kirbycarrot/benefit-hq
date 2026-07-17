@@ -45,6 +45,18 @@ export const ratePeriodSchema = z.object({
   ratePeriod: z.enum(RATE_PERIODS),
 });
 
+export const deckSelectionsSchema = z.record(
+  z.string().min(1).max(100),
+  z.object({
+    enabled: z.boolean(),
+    params: z
+      .object({
+        view: z.string().min(1).max(50).optional(),
+      })
+      .optional(),
+  })
+);
+
 export const policyLineSchema = z.object({
   coverageType: z.enum(COVERAGE_TYPES),
   planName: z.string().min(1, "Plan name is required").max(200),

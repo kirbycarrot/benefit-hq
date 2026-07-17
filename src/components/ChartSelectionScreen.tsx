@@ -16,6 +16,22 @@ import {
 } from "recharts";
 import type { ChartResult } from "@/lib/charts/types";
 import { renderGeographyMapSvg } from "@/lib/geography/mapRender";
+import { readApiError } from "@/lib/api-response";
+import {
+  chartView,
+  chartViewOptions,
+  COVERAGE_TIER_KEYS,
+  type ChartSelection,
+} from "@/lib/charts/viewOptions";
+import {
+  contributionBarResult,
+  geographyBarResult,
+  geographyTableResult,
+  participationBarResult,
+  participationTableResult,
+  renewalBarResult,
+  tierTableResult,
+} from "@/lib/charts/viewTransforms";
 
 type ChartDefinition = {
   key: string;
@@ -78,26 +94,60 @@ export function ChartSelectionScreen({
 }: {
   planYearId: string;
   chartDefinitions: ChartDefinition[];
-  initialSelections: Record<string, boolean>;
+  initialSelections: Record<string, ChartSelection>;
   chartResults: Record<string, ChartResult>;
 }) {
   const [selections, setSelections] = useState(initialSelections);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function persistSelections(next: Record<string, ChartSelection>): Promise<boolean> {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/plan-years/${planYearId}/deck-config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selections: next }),
+      });
+      if (!response.ok) {
+        setError(await readApiError(response, "Unable to save the deck settings"));
+        return false;
+      }
+      return true;
+    } catch {
+      setError("Unable to save the deck settings. Please try again.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function toggle(key: string) {
-    const next = { ...selections, [key]: !selections[key] };
+    const previous = selections;
+    const current = selections[key] ?? { enabled: true };
+    const next = { ...selections, [key]: { ...current, enabled: !current.enabled } };
     setSelections(next);
-    setSaving(true);
-    await fetch(`/api/plan-years/${planYearId}/deck-config`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        selections: Object.fromEntries(
-          Object.entries(next).map(([k, enabled]) => [k, { enabled }])
-        ),
-      }),
-    });
-    setSaving(false);
+    if (!(await persistSelections(next))) setSelections(previous);
+  }
+
+  async function changeView(key: string, view: string) {
+    const previous = selections;
+    const affectedKeys = COVERAGE_TIER_KEYS.includes(
+      key as (typeof COVERAGE_TIER_KEYS)[number]
+    )
+      ? COVERAGE_TIER_KEYS
+      : [key];
+    const next = { ...selections };
+    for (const affectedKey of affectedKeys) {
+      const current = next[affectedKey] ?? { enabled: true };
+      next[affectedKey] = {
+        ...current,
+        params: { ...current.params, view },
+      };
+    }
+    setSelections(next);
+    if (!(await persistSelections(next))) setSelections(previous);
   }
 
   const grouped = chartDefinitions.reduce<Record<string, ChartDefinition[]>>((acc, def) => {
@@ -108,15 +158,40 @@ export function ChartSelectionScreen({
   return (
     <div>
       {saving && <p className="mb-2 text-xs text-text-400">Saving...</p>}
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
       {Object.entries(grouped).map(([category, defs]) => (
-        <div key={category} className="mb-8">
-          <h3 className="mb-3 text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
-            {category}
-          </h3>
-          <div className="space-y-4">
+        <details key={category} open className="group mb-6">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-[12px] border border-border-light bg-panel-tint px-4 py-3 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-deep [&::-webkit-details-marker]:hidden">
+            <span className="text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
+              {category}
+            </span>
+            <span className="flex shrink-0 items-center gap-3">
+              <span className="text-[11px] font-medium text-text-400">
+                {defs.length} {defs.length === 1 ? "item" : "items"}
+              </span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                className="h-4 w-4 text-text-600 transition-transform duration-200 group-open:rotate-180"
+              >
+                <path
+                  d="m5 7.5 5 5 5-5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4">
             {defs.map((def) => {
-              const enabled = selections[def.key] ?? true;
+              const selection = selections[def.key] ?? { enabled: true };
+              const enabled = selection.enabled;
               const result = chartResults[def.key];
+              const viewOptions = chartViewOptions(def.key);
+              const selectedView = chartView(def.key, selection);
               const renewalUnavailable =
                 result?.kind === "renewal" && !result.available;
               return (
@@ -126,8 +201,8 @@ export function ChartSelectionScreen({
                     enabled ? "border-border-light" : "border-border-lighter opacity-60"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div className="min-w-0">
                       <label className="flex items-center gap-2.5">
                         <input
                           type="checkbox"
@@ -140,6 +215,24 @@ export function ChartSelectionScreen({
                       </label>
                       <p className="mt-1 ml-[26px] text-xs text-text-400">{def.description}</p>
                     </div>
+                    {viewOptions && selectedView && (
+                      <label className="flex shrink-0 items-center gap-2 pl-[26px] text-xs font-semibold text-text-600 sm:pl-0">
+                        <span>View</span>
+                        <select
+                          aria-label={`View for ${def.label}`}
+                          value={selectedView}
+                          onChange={(event) => void changeView(def.key, event.target.value)}
+                          disabled={!enabled || renewalUnavailable || saving}
+                          className="h-9 rounded-[9px] border border-input-border bg-white px-3 text-xs text-text-900 focus:border-teal-deep focus:outline-none disabled:opacity-50"
+                        >
+                          {viewOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
 
                   {enabled && result && (
@@ -152,7 +245,7 @@ export function ChartSelectionScreen({
                           </p>
                         </div>
                       ) : (
-                        <ChartPreview result={result} />
+                        <ChartPreview result={result} view={selectedView} />
                       )}
                     </div>
                   )}
@@ -160,13 +253,13 @@ export function ChartSelectionScreen({
               );
             })}
           </div>
-        </div>
+        </details>
       ))}
     </div>
   );
 }
 
-function ChartPreview({ result }: { result: ChartResult }) {
+function ChartPreview({ result, view }: { result: ChartResult; view?: string }) {
   if (result.kind === "executive") {
     return (
       <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-panel-tint">
@@ -201,6 +294,13 @@ function ChartPreview({ result }: { result: ChartResult }) {
   }
 
   if (result.kind === "participation") {
+    if (view === "table") {
+      return <ChartPreview result={participationTableResult(result)} />;
+    }
+    if (view === "stacked") {
+      return <AlternateBarPreview result={participationBarResult(result)} stacked />;
+    }
+
     return (
       <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-3 sm:p-4">
         <div className="grid gap-3 lg:grid-cols-3">
@@ -265,6 +365,10 @@ function ChartPreview({ result }: { result: ChartResult }) {
   }
 
   if (result.kind === "contribution") {
+    if (view === "stacked") {
+      return <AlternateBarPreview result={contributionBarResult(result)} stacked currency />;
+    }
+
     const matchPercentage = result.totalElections
       ? (result.matchedElections / result.totalElections) * 100
       : 0;
@@ -367,6 +471,9 @@ function ChartPreview({ result }: { result: ChartResult }) {
 
   if (result.kind === "renewal") {
     if (!result.available) return null;
+    if (view === "bar") {
+      return <AlternateBarPreview result={renewalBarResult(result)} currency />;
+    }
     const summaryCards = [
       {
         label: "Employer annual impact",
@@ -774,6 +881,13 @@ function ChartPreview({ result }: { result: ChartResult }) {
   }
 
   if (result.kind === "map") {
+    if (view === "table") {
+      return <ChartPreview result={geographyTableResult(result)} />;
+    }
+    if (view === "bar") {
+      return <AlternateBarPreview result={geographyBarResult(result)} horizontal />;
+    }
+
     const topAreas = [...result.areas].sort((a, b) => b.value - a.value).slice(0, 4);
     const coverage = result.totalEmployees
       ? Math.round((result.mappedEmployees / result.totalEmployees) * 100)
@@ -814,6 +928,13 @@ function ChartPreview({ result }: { result: ChartResult }) {
     );
   }
 
+  if (view === "table") {
+    return <ChartPreview result={tierTableResult([result])} />;
+  }
+  if (view === "stacked") {
+    return <AlternateBarPreview result={result} stacked normalize />;
+  }
+
   return (
     <div className="h-56 w-full sm:h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -825,6 +946,88 @@ function ChartPreview({ result }: { result: ChartResult }) {
           <Legend wrapperStyle={CHART_FONT} />
           {result.series.map((s, i) => (
             <Bar key={s.key} dataKey={s.key} name={s.label} fill={COLORS[i % COLORS.length]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function AlternateBarPreview({
+  result,
+  stacked = false,
+  normalize = false,
+  currency = false,
+  horizontal = false,
+}: {
+  result: Extract<ChartResult, { kind: "bar" }>;
+  stacked?: boolean;
+  normalize?: boolean;
+  currency?: boolean;
+  horizontal?: boolean;
+}) {
+  const data = normalize
+    ? result.data.map((row) => {
+        const total = result.series.reduce(
+          (sum, series) => sum + (Number(row[series.key]) || 0),
+          0
+        );
+        return {
+          ...row,
+          ...Object.fromEntries(
+            result.series.map((series) => [
+              series.key,
+              total ? ((Number(row[series.key]) || 0) / total) * 100 : 0,
+            ])
+          ),
+        };
+      })
+    : result.data;
+  const formatAxis = (value: number) =>
+    normalize ? `${Math.round(value)}%` : currency ? formatCompactCurrency(value) : String(value);
+
+  return (
+    <div className="h-64 w-full sm:h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout={horizontal ? "vertical" : "horizontal"}
+          margin={horizontal ? { left: 30, right: 18 } : undefined}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#efeee9" />
+          {horizontal ? (
+            <>
+              <XAxis type="number" tick={CHART_FONT} allowDecimals={false} />
+              <YAxis
+                type="category"
+                dataKey={result.xKey}
+                tick={CHART_FONT}
+                width={115}
+              />
+            </>
+          ) : (
+            <>
+              <XAxis dataKey={result.xKey} tick={CHART_FONT} />
+              <YAxis
+                tick={CHART_FONT}
+                allowDecimals={false}
+                domain={normalize ? [0, 100] : undefined}
+                tickFormatter={formatAxis}
+              />
+            </>
+          )}
+          <Tooltip
+            formatter={(value) => formatAxis(Number(value))}
+          />
+          <Legend wrapperStyle={CHART_FONT} />
+          {result.series.map((series, index) => (
+            <Bar
+              key={series.key}
+              dataKey={series.key}
+              name={series.label}
+              stackId={stacked ? "selected-view" : undefined}
+              fill={COLORS[index % COLORS.length]}
+            />
           ))}
         </BarChart>
       </ResponsiveContainer>

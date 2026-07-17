@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   TIER_LABELS,
   addCurrencyAmounts,
+  deckSelectionsSchema,
   policyLineSchema,
   ratePeriodSchema,
 } from "@/lib/validation";
@@ -31,6 +32,21 @@ test("policy lines require an explicit supported rate period", () => {
 test("rate period updates accept only supported values", () => {
   assert.equal(ratePeriodSchema.safeParse({ ratePeriod: "annual" }).success, true);
   assert.equal(ratePeriodSchema.safeParse({ ratePeriod: "sometimes" }).success, false);
+});
+
+test("deck selections accept persisted chart views", () => {
+  assert.equal(
+    deckSelectionsSchema.safeParse({
+      "geographic-distribution": { enabled: true, params: { view: "bar" } },
+    }).success,
+    true
+  );
+  assert.equal(
+    deckSelectionsSchema.safeParse({
+      "geographic-distribution": { enabled: "yes", params: { view: "bar" } },
+    }).success,
+    false
+  );
 });
 
 test("employee tier labels use full names", () => {
