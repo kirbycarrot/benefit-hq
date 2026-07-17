@@ -127,7 +127,7 @@ model ChartDefinition {
   key            String  @unique
   label          String
   description    String
-  category       String // demographics | enrollment | cost | ancillary
+  category       String // Presentation section label
   defaultEnabled Boolean @default(true)
   sortOrder      Int     @default(0)
 }
