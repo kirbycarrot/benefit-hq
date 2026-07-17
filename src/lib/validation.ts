@@ -28,8 +28,8 @@ export const TIERS = ["EE", "EE+Spouse", "EE+Child", "Family"] as const;
 
 export const TIER_LABELS: Record<(typeof TIERS)[number], string> = {
   EE: "Employee",
-  "EE+Spouse": "EE+Spouse",
-  "EE+Child": "EE+Child",
+  "EE+Spouse": "Employee + Spouse",
+  "EE+Child": "Employee + Child",
   Family: "Family",
 };
 
@@ -40,6 +40,10 @@ export const RATE_PERIOD_LABELS: Record<(typeof RATE_PERIODS)[number], string> =
   "per-pay-period": "Per pay period",
   annual: "Annual",
 };
+
+export const ratePeriodSchema = z.object({
+  ratePeriod: z.enum(RATE_PERIODS),
+});
 
 export const policyLineSchema = z.object({
   coverageType: z.enum(COVERAGE_TYPES),

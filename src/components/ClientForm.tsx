@@ -39,8 +39,9 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
     if (file) setLogoPreview(URL.createObjectURL(file));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
     setLoading(true);
 
@@ -63,6 +64,11 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
     }
 
     const data = await res.json();
+    if (mode === "edit") {
+      const details = form.closest("details");
+      details?.removeAttribute("open");
+      details?.querySelector<HTMLElement>("summary")?.focus();
+    }
     router.push(`/clients/${data.id}`);
     router.refresh();
   }
@@ -100,9 +106,11 @@ export function ClientForm({ mode, clientId, initial }: ClientFormProps) {
             >
               Choose file
             </label>
-            <span className="truncate text-[13px] text-text-600">
-              {logoFile?.name ?? (initial?.logoPath ? "Current logo" : "No file selected")}
-            </span>
+            {(logoFile || !initial?.logoPath) && (
+              <span className="truncate text-[13px] text-text-600">
+                {logoFile?.name ?? "No file selected"}
+              </span>
+            )}
             <input
               id={logoInputId}
               type="file"

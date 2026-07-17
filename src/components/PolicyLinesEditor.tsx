@@ -44,6 +44,32 @@ export function PolicyLinesEditor({
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingRatePeriod, setSavingRatePeriod] = useState(false);
+
+  async function handleRatePeriodChange(nextRatePeriod: string) {
+    const previousRatePeriod = ratePeriod;
+    setRatePeriod(nextRatePeriod);
+    setError(null);
+
+    if (initialPolicyLines.length === 0) return;
+
+    setSavingRatePeriod(true);
+    const res = await fetch(`/api/plan-years/${planYearId}/policy-lines`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ratePeriod: nextRatePeriod }),
+    });
+    setSavingRatePeriod(false);
+
+    if (!res.ok) {
+      const data = await res.json();
+      setRatePeriod(previousRatePeriod);
+      setError(data.error ?? "Unable to update the rate period");
+      return;
+    }
+
+    router.refresh();
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -230,11 +256,16 @@ export function PolicyLinesEditor({
           />
         </div>
         <div>
-          <label className={labelClass}>Rate period</label>
+          <label className={labelClass}>
+            Rate period
+            {savingRatePeriod && (
+              <span className="ml-2 font-normal text-text-400">Saving...</span>
+            )}
+          </label>
           <select
             value={ratePeriod}
-            onChange={(e) => setRatePeriod(e.target.value)}
-            disabled={initialPolicyLines.length > 0}
+            onChange={(e) => void handleRatePeriodChange(e.target.value)}
+            disabled={savingRatePeriod}
             className={`${inputClass} w-[150px]`}
           >
             {RATE_PERIODS.map((period) => (
@@ -246,7 +277,7 @@ export function PolicyLinesEditor({
         </div>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || savingRatePeriod}
           className="h-11 rounded-full bg-ink-900 px-5 text-[13px] font-semibold whitespace-nowrap text-white hover:bg-black disabled:opacity-50"
         >
           {loading ? "Adding..." : "Add line"}

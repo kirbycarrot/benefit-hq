@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addCurrencyAmounts, policyLineSchema } from "@/lib/validation";
+import {
+  TIER_LABELS,
+  addCurrencyAmounts,
+  policyLineSchema,
+  ratePeriodSchema,
+} from "@/lib/validation";
 
 test("policy lines require an explicit supported rate period", () => {
   const parsed = policyLineSchema.safeParse({
@@ -21,6 +26,17 @@ test("policy lines require an explicit supported rate period", () => {
     employerCost: 2,
     ratePeriod: "sometimes",
   }).success, false);
+});
+
+test("rate period updates accept only supported values", () => {
+  assert.equal(ratePeriodSchema.safeParse({ ratePeriod: "annual" }).success, true);
+  assert.equal(ratePeriodSchema.safeParse({ ratePeriod: "sometimes" }).success, false);
+});
+
+test("employee tier labels use full names", () => {
+  assert.equal(TIER_LABELS.EE, "Employee");
+  assert.equal(TIER_LABELS["EE+Spouse"], "Employee + Spouse");
+  assert.equal(TIER_LABELS["EE+Child"], "Employee + Child");
 });
 
 test("currency addition is stable at cent precision", () => {

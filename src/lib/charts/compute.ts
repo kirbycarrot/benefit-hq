@@ -65,9 +65,9 @@ function tierFromOption(optionName: string | null): string {
   const hasSpouse = /spouse|[/+\- ]sp\b/.test(text);
   const hasChild = /child|[/+\- ]ch\b/.test(text);
   if (text.includes("family") || (hasSpouse && hasChild)) return "Family";
-  if (hasSpouse) return "EE+Spouse";
-  if (hasChild) return "EE+Child";
-  return "EE Only";
+  if (hasSpouse) return "Employee + Spouse";
+  if (hasChild) return "Employee + Child";
+  return "Employee";
 }
 
 function isSpouseRelationship(relationshipType: string | null | undefined): boolean {
@@ -203,7 +203,7 @@ function computeSalaryBandDistribution(ds: ChartDataset): ChartResult {
 }
 
 function computeTierEnrollment(ds: ChartDataset, benefitType: string, title: string): ChartResult {
-  const tiers = ["EE Only", "EE+Spouse", "EE+Child", "Family"];
+  const tiers = ["Employee", "Employee + Spouse", "Employee + Child", "Family"];
   const row: Record<string, string | number> = { plan: benefitType };
   for (const t of tiers) row[t] = 0;
   let waived = 0;

@@ -60,6 +60,7 @@ test("premium chart output carries the rate period and enforced total", () => {
   if (result.kind !== "table") return;
 
   assert.deepEqual(result.columns.slice(-2), ["Total premium", "Rate period"]);
+  assert.equal(result.rows[0][2], "Employee");
   assert.deepEqual(result.rows[0].slice(-2), ["$500.00", "Monthly"]);
 });
 
