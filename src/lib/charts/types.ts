@@ -83,6 +83,60 @@ export type ChartResult =
       findings: string[];
       note: string;
     }
+  | {
+      kind: "renewal";
+      available: false;
+      title: string;
+      message: string;
+    }
+  | {
+      kind: "renewal";
+      available: true;
+      title: string;
+      priorLabel: string;
+      currentLabel: string;
+      priorEffectiveDate: Date;
+      currentEffectiveDate: Date;
+      summary: {
+        priorAnnualEmployerCost: number;
+        currentAnnualEmployerCost: number;
+        employerChange: number;
+        employerChangePercentage: number | null;
+        priorAnnualEmployeeCost: number;
+        currentAnnualEmployeeCost: number;
+        employeeChange: number;
+        employeeChangePercentage: number | null;
+        priorAnnualTotalCost: number;
+        currentAnnualTotalCost: number;
+        totalChange: number;
+        totalChangePercentage: number | null;
+      };
+      rows: {
+        status: "matched" | "renamed" | "new" | "removed";
+        benefit: string;
+        priorPlan: string | null;
+        currentPlan: string | null;
+        tier: string;
+        enrolled: number;
+        priorEmployeeRate: number | null;
+        currentEmployeeRate: number | null;
+        priorEmployerRate: number | null;
+        currentEmployerRate: number | null;
+        priorRatePeriod: string | null;
+        currentRatePeriod: string | null;
+        priorAnnualEmployeeCost: number | null;
+        currentAnnualEmployeeCost: number | null;
+        priorAnnualEmployerCost: number | null;
+        currentAnnualEmployerCost: number | null;
+        totalChange: number | null;
+        totalChangePercentage: number | null;
+      }[];
+      comparableRows: number;
+      renamedRows: number;
+      newRows: number;
+      removedRows: number;
+      note: string;
+    }
   | { kind: "stats"; title: string; stats: { label: string; value: string }[] }
   | {
       kind: "bar";

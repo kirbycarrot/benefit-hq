@@ -191,6 +191,29 @@ function dataQualityDataset(): ChartDataset {
   };
 }
 
+function renewalDataset(): ChartDataset {
+  const current = dataset();
+  return {
+    ...current,
+    comparisonPlanYear: {
+      id: "prior-plan-year",
+      label: "2026",
+      effectiveDate: new Date("2026-01-01T00:00:00Z"),
+      policyLines: [
+        {
+          ...current.policyLines[0],
+          id: "prior-policy-line",
+          planYearId: "prior-plan-year",
+          employeeCost: 100 as never,
+          employerCost: 300 as never,
+          totalPremium: 400 as never,
+          createdAt: new Date("2025-01-01T00:00:00Z"),
+        },
+      ],
+    },
+  };
+}
+
 test("premium chart output carries the rate period and enforced total", () => {
   const result = CHART_COMPUTE["premium-summary-table"](dataset());
   assert.equal(result.kind, "table");
@@ -371,6 +394,59 @@ test("contribution strategy assumes 26 periods and recognizes full spouse tier n
   assert.equal(result.annualEmployeeSpend, 260);
   assert.equal(result.annualEmployerSpend, 780);
   assert.equal(result.annualTotalSpend, 1040);
+});
+
+test("renewal comparison applies current enrollment to both rate sets", () => {
+  const result = CHART_COMPUTE["renewal-comparison"](renewalDataset());
+
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.equal(result.priorLabel, "2026");
+  assert.equal(result.currentLabel, "2027");
+  assert.equal(result.comparableRows, 1);
+  assert.equal(result.newRows, 0);
+  assert.equal(result.removedRows, 0);
+  assert.equal(result.summary.priorAnnualEmployeeCost, 1200);
+  assert.equal(result.summary.currentAnnualEmployeeCost, 1500);
+  assert.equal(result.summary.employeeChange, 300);
+  assert.equal(result.summary.priorAnnualEmployerCost, 3600);
+  assert.equal(result.summary.currentAnnualEmployerCost, 4500);
+  assert.equal(result.summary.employerChange, 900);
+  assert.equal(result.summary.priorAnnualTotalCost, 4800);
+  assert.equal(result.summary.currentAnnualTotalCost, 6000);
+  assert.equal(result.summary.totalChange, 1200);
+  assert.equal(result.summary.totalChangePercentage, 25);
+  assert.equal(result.rows[0].enrolled, 1);
+  assert.equal(result.rows[0].totalChange, 1200);
+});
+
+test("renewal comparison is unavailable when there is only one plan year", () => {
+  const result = CHART_COMPUTE["renewal-comparison"](dataset());
+
+  assert.deepEqual(result, {
+    kind: "renewal",
+    available: false,
+    title: "Renewal Comparison",
+    message: "Add an earlier plan year to enable renewal comparison.",
+  });
+});
+
+test("renewal comparison pairs a unique plan rename without treating it as new spend", () => {
+  const ds = renewalDataset();
+  ds.policyLines[0].planName = "Renewal PPO";
+  ds.comparisonPlanYear!.policyLines[0].planName = "Legacy PPO";
+
+  const result = CHART_COMPUTE["renewal-comparison"](ds);
+
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.equal(result.comparableRows, 1);
+  assert.equal(result.renamedRows, 1);
+  assert.equal(result.newRows, 0);
+  assert.equal(result.removedRows, 0);
+  assert.equal(result.rows[0].status, "renamed");
+  assert.equal(result.rows[0].priorPlan, "Legacy PPO");
+  assert.equal(result.rows[0].currentPlan, "Renewal PPO");
 });
 
 test("workforce geography uses a state map when employees span states", () => {

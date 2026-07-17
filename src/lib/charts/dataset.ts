@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export async function loadChartDataset(planYearId: string) {
+async function loadCurrentPlanYear(planYearId: string) {
   const planYear = await prisma.planYear.findUniqueOrThrow({
     where: { id: planYearId },
     include: {
@@ -12,7 +12,37 @@ export async function loadChartDataset(planYearId: string) {
   return planYear;
 }
 
-export type ChartDataset = Awaited<ReturnType<typeof loadChartDataset>>;
+async function loadPriorPlanYear(clientId: string, effectiveDate: Date) {
+  return prisma.planYear.findFirst({
+    where: {
+      clientId,
+      effectiveDate: { lt: effectiveDate },
+    },
+    orderBy: { effectiveDate: "desc" },
+    select: {
+      id: true,
+      label: true,
+      effectiveDate: true,
+      policyLines: { orderBy: { createdAt: "asc" } },
+    },
+  });
+}
+
+type CurrentPlanYear = Awaited<ReturnType<typeof loadCurrentPlanYear>>;
+type PriorPlanYear = Awaited<ReturnType<typeof loadPriorPlanYear>>;
+
+export type ChartDataset = CurrentPlanYear & {
+  comparisonPlanYear?: PriorPlanYear;
+};
+
+export async function loadChartDataset(planYearId: string): Promise<ChartDataset> {
+  const planYear = await loadCurrentPlanYear(planYearId);
+  const comparisonPlanYear = await loadPriorPlanYear(
+    planYear.clientId,
+    planYear.effectiveDate
+  );
+  return { ...planYear, comparisonPlanYear };
+}
 
 export function ageInYears(birthDate: Date | null, asOf: Date): number | null {
   if (!birthDate) return null;

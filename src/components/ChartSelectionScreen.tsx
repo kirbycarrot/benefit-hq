@@ -45,6 +45,17 @@ function formatRate(value: number): string {
   }).format(value);
 }
 
+function formatSignedCompactCurrency(value: number): string {
+  if (value === 0) return formatCompactCurrency(0);
+  return `${value > 0 ? "+" : "−"}${formatCompactCurrency(Math.abs(value))}`;
+}
+
+function formatChange(value: number | null): string {
+  if (value === null) return "—";
+  if (value === 0) return "0.0%";
+  return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}%`;
+}
+
 function ratePeriodShort(ratePeriod: string): string {
   if (ratePeriod === "monthly") return "month";
   if (ratePeriod === "per-pay-period") return "pay period";
@@ -106,6 +117,8 @@ export function ChartSelectionScreen({
             {defs.map((def) => {
               const enabled = selections[def.key] ?? true;
               const result = chartResults[def.key];
+              const renewalUnavailable =
+                result?.kind === "renewal" && !result.available;
               return (
                 <div
                   key={def.key}
@@ -118,8 +131,9 @@ export function ChartSelectionScreen({
                       <label className="flex items-center gap-2.5">
                         <input
                           type="checkbox"
-                          checked={enabled}
+                          checked={renewalUnavailable ? false : enabled}
                           onChange={() => toggle(def.key)}
+                          disabled={renewalUnavailable}
                           className="h-4 w-4 rounded border-input-border accent-ink-900"
                         />
                         <span className="text-sm font-semibold text-text-900">{def.label}</span>
@@ -130,7 +144,16 @@ export function ChartSelectionScreen({
 
                   {enabled && result && (
                     <div className="mt-4">
-                      <ChartPreview result={result} />
+                      {renewalUnavailable ? (
+                        <div className="rounded-[10px] border border-dashed border-border-light bg-panel-tint px-4 py-5 text-center">
+                          <p className="text-sm font-semibold text-text-600">{result.message}</p>
+                          <p className="mt-1 text-xs text-text-400">
+                            The generated PowerPoint will omit this slide until a comparison year exists.
+                          </p>
+                        </div>
+                      ) : (
+                        <ChartPreview result={result} />
+                      )}
                     </div>
                   )}
                 </div>
@@ -336,6 +359,134 @@ function ChartPreview({ result }: { result: ChartResult }) {
           </p>
         )}
         <p className="border-t border-border-lighter bg-panel-tint px-4 py-3 text-[10px] leading-4 text-text-400">
+          {result.note}
+        </p>
+      </div>
+    );
+  }
+
+  if (result.kind === "renewal") {
+    if (!result.available) return null;
+    const summaryCards = [
+      {
+        label: "Employer annual impact",
+        value: formatSignedCompactCurrency(result.summary.employerChange),
+        change: formatChange(result.summary.employerChangePercentage),
+        detail: `${formatCompactCurrency(result.summary.priorAnnualEmployerCost)} → ${formatCompactCurrency(result.summary.currentAnnualEmployerCost)}`,
+      },
+      {
+        label: "Employee annual impact",
+        value: formatSignedCompactCurrency(result.summary.employeeChange),
+        change: formatChange(result.summary.employeeChangePercentage),
+        detail: `${formatCompactCurrency(result.summary.priorAnnualEmployeeCost)} → ${formatCompactCurrency(result.summary.currentAnnualEmployeeCost)}`,
+      },
+      {
+        label: "Total renewal impact",
+        value: formatSignedCompactCurrency(result.summary.totalChange),
+        change: formatChange(result.summary.totalChangePercentage),
+        detail: `${formatCompactCurrency(result.summary.priorAnnualTotalCost)} → ${formatCompactCurrency(result.summary.currentAnnualTotalCost)}`,
+      },
+      {
+        label: "Comparable rate rows",
+        value: String(result.comparableRows),
+        change: `${result.renamedRows} renamed`,
+        detail: `${result.newRows} new · ${result.removedRows} removed`,
+      },
+    ];
+
+    return (
+      <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
+        <div className="grid grid-cols-2 gap-px bg-border-lighter lg:grid-cols-4">
+          {summaryCards.map((card, index) => (
+            <div key={card.label} className="min-w-0 bg-panel-tint px-3 py-3.5 sm:px-4">
+              <div className="flex items-baseline gap-2">
+                <p className="text-lg font-extrabold text-text-900 sm:text-xl">{card.value}</p>
+                <p
+                  className={`text-[10px] font-bold ${index < 3 && card.change.startsWith("+") ? "text-amber" : "text-text-600"}`}
+                >
+                  {card.change}
+                </p>
+              </div>
+              <p className="mt-1 text-xs font-semibold text-text-900">{card.label}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-text-400">{card.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-[980px] divide-y divide-border-lighter text-xs">
+            <thead>
+              <tr>
+                {[
+                  "Benefit / plan",
+                  "Coverage tier",
+                  `${result.currentLabel} enrolled`,
+                  "Employee rate",
+                  "Employer rate",
+                  "Annual premium impact",
+                  "Rate change",
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    className="px-3 py-2.5 text-left text-[10px] font-bold tracking-[0.04em] whitespace-nowrap text-text-400 uppercase"
+                  >
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-lighter">
+              {result.rows.map((row, index) => {
+                const employeeRates =
+                  row.priorEmployeeRate === null || row.currentEmployeeRate === null
+                    ? row.status === "new"
+                      ? `New · ${formatRate(row.currentEmployeeRate ?? 0)} / ${ratePeriodShort(row.currentRatePeriod ?? "")}`
+                      : `${formatRate(row.priorEmployeeRate ?? 0)} / ${ratePeriodShort(row.priorRatePeriod ?? "")} · Removed`
+                    : `${formatRate(row.priorEmployeeRate)} / ${ratePeriodShort(row.priorRatePeriod ?? "")} → ${formatRate(row.currentEmployeeRate)} / ${ratePeriodShort(row.currentRatePeriod ?? "")}`;
+                const employerRates =
+                  row.priorEmployerRate === null || row.currentEmployerRate === null
+                    ? row.status === "new"
+                      ? `New · ${formatRate(row.currentEmployerRate ?? 0)} / ${ratePeriodShort(row.currentRatePeriod ?? "")}`
+                      : `${formatRate(row.priorEmployerRate ?? 0)} / ${ratePeriodShort(row.priorRatePeriod ?? "")} · Removed`
+                    : `${formatRate(row.priorEmployerRate)} / ${ratePeriodShort(row.priorRatePeriod ?? "")} → ${formatRate(row.currentEmployerRate)} / ${ratePeriodShort(row.currentRatePeriod ?? "")}`;
+                return (
+                  <tr key={`${row.benefit}-${row.currentPlan}-${row.priorPlan}-${row.tier}-${index}`}>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-semibold text-text-900">{row.benefit}</p>
+                          <p className="text-[10px] text-text-400">
+                            {row.status === "renamed"
+                              ? `${row.priorPlan} → ${row.currentPlan}`
+                              : row.currentPlan ?? row.priorPlan}
+                          </p>
+                        </div>
+                        {row.status !== "matched" && (
+                          <span className="rounded-full bg-panel-tint px-2 py-0.5 text-[9px] font-bold text-text-600 capitalize">
+                            {row.status}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-text-600">{row.tier}</td>
+                    <td className="px-3 py-2.5 font-semibold text-text-900">
+                      {row.status === "removed" ? "—" : row.enrolled}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-text-600">{employeeRates}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-text-600">{employerRates}</td>
+                    <td className="px-3 py-2.5 font-bold text-text-900">
+                      {row.totalChange === null ? "—" : formatSignedCompactCurrency(row.totalChange)}
+                    </td>
+                    <td className="px-3 py-2.5 font-semibold text-text-900">
+                      {formatChange(row.totalChangePercentage)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="border-t border-border-lighter bg-panel-tint px-4 py-3 text-[9px] leading-4 text-text-400">
           {result.note}
         </p>
       </div>

@@ -105,7 +105,10 @@ export default async function ClientDetailPage({
         <div>
           <div className="mb-3.5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-[17px] font-bold text-text-900">Plan years</h2>
-            <NewPlanYearForm clientId={client.id} />
+            <NewPlanYearForm
+              clientId={client.id}
+              currentYear={new Date().getFullYear()}
+            />
           </div>
 
           {client.planYears.length === 0 ? (

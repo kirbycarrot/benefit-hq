@@ -3,10 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function NewPlanYearForm({ clientId }: { clientId: string }) {
+export function NewPlanYearForm({
+  clientId,
+  currentYear,
+}: {
+  clientId: string;
+  currentYear: number;
+}) {
   const router = useRouter();
-  const [label, setLabel] = useState("");
-  const [effectiveDate, setEffectiveDate] = useState("");
+  const [label, setLabel] = useState(`${currentYear} Plan Year`);
+  const [effectiveDate, setEffectiveDate] = useState(`${currentYear + 1}-01-01`);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -53,7 +59,7 @@ export function NewPlanYearForm({ clientId }: { clientId: string }) {
         <input
           type="text"
           required
-          placeholder="2026 Plan Year"
+          placeholder={`${currentYear} Plan Year`}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           className="w-full rounded-[10px] border border-input-border px-3 py-2.5 text-[13px] focus:border-teal-deep focus:outline-none sm:w-auto"

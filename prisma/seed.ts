@@ -164,6 +164,15 @@ const CHART_DEFINITIONS = [
     sortOrder: 250,
   },
 
+  // Renewal
+  {
+    key: "renewal-comparison",
+    label: "Renewal Comparison",
+    description: "Prior-versus-renewal rates and estimated annual employer, employee, and total cost changes using renewal-year enrollment.",
+    category: "renewal",
+    sortOrder: 280,
+  },
+
   // Cost
   {
     key: "contribution-strategy",

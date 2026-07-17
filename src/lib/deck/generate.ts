@@ -71,6 +71,17 @@ function rateCurrency(value: number, ratePeriod: string): string {
   return `$${value.toFixed(2)} / ${suffix}`;
 }
 
+function signedCompactCurrency(value: number): string {
+  if (value === 0) return compactCurrency(0);
+  return `${value > 0 ? "+" : "−"}${compactCurrency(Math.abs(value))}`;
+}
+
+function percentageChangeLabel(value: number | null): string {
+  if (value === null) return "—";
+  if (value === 0) return "0.0%";
+  return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}%`;
+}
+
 function addHeader(slide: PptxGenJS.Slide, title: string, primary: string, secondary: string) {
   slide.addShape("rect", { x: 0, y: 0, w: SLIDE_W, h: 0.9, fill: { color: primary } });
   slide.addShape("rect", { x: 0, y: 0.9, w: SLIDE_W, h: 0.06, fill: { color: secondary } });
@@ -1183,6 +1194,262 @@ export function addDataQualitySlide(
   });
 }
 
+export function addRenewalComparisonSlides(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "renewal"; available: true }>,
+  primary: string,
+  secondary: string
+) {
+  const primaryColor = stripHash(primary);
+  const warningColor = "D97706";
+  const firstPageRows = result.rows.slice(0, 7);
+  const remainingRows = result.rows.slice(7);
+  const pages = [
+    { rows: firstPageRows, first: true },
+    ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
+      rows: remainingRows.slice(index * 10, index * 10 + 10),
+      first: false,
+    })),
+  ];
+
+  const rateTransition = (
+    priorRate: number | null,
+    priorPeriod: string | null,
+    currentRate: number | null,
+    currentPeriod: string | null,
+    status: (typeof result.rows)[number]["status"]
+  ) => {
+    if (status === "new")
+      return `New · ${rateCurrency(currentRate ?? 0, currentPeriod ?? "")}`;
+    if (status === "removed")
+      return `${rateCurrency(priorRate ?? 0, priorPeriod ?? "")} · Removed`;
+    return `${rateCurrency(priorRate ?? 0, priorPeriod ?? "")} → ${rateCurrency(currentRate ?? 0, currentPeriod ?? "")}`;
+  };
+
+  const tableRows = (rows: typeof result.rows): PptxGenJS.TableRow[] => {
+    const header: PptxGenJS.TableRow = [
+      "Benefit / plan",
+      "Coverage tier",
+      `${result.currentLabel} enrolled`,
+      "Employee rate",
+      "Employer rate",
+      "Annual impact",
+      "Rate change",
+    ].map((text) => ({
+      text,
+      options: {
+        fill: { color: primaryColor },
+        color: "FFFFFF",
+        bold: true,
+        fontSize: 8.2,
+        margin: 0.05,
+      },
+    }));
+
+    const body: PptxGenJS.TableRow[] = rows.map((row, index) => {
+      const fill = index % 2 === 0 ? "FFFFFF" : "F7F8F7";
+      const baseOptions = {
+        fill: { color: fill },
+        color: "273036",
+        fontSize: 7.9,
+        margin: 0.05,
+      };
+      const plan =
+        row.status === "renamed"
+          ? `${row.benefit} · ${row.priorPlan} → ${row.currentPlan} (renamed)`
+          : `${row.benefit} · ${row.currentPlan ?? row.priorPlan}${row.status === "new" ? " (new)" : row.status === "removed" ? " (removed)" : ""}`;
+      return [
+        { text: plan, options: { ...baseOptions, bold: true } },
+        { text: row.tier, options: baseOptions },
+        {
+          text: row.status === "removed" ? "—" : String(row.enrolled),
+          options: { ...baseOptions, bold: true, align: "center" },
+        },
+        {
+          text: rateTransition(
+            row.priorEmployeeRate,
+            row.priorRatePeriod,
+            row.currentEmployeeRate,
+            row.currentRatePeriod,
+            row.status
+          ),
+          options: baseOptions,
+        },
+        {
+          text: rateTransition(
+            row.priorEmployerRate,
+            row.priorRatePeriod,
+            row.currentEmployerRate,
+            row.currentRatePeriod,
+            row.status
+          ),
+          options: baseOptions,
+        },
+        {
+          text: row.totalChange === null ? "—" : signedCompactCurrency(row.totalChange),
+          options: {
+            ...baseOptions,
+            bold: true,
+            color: row.totalChange !== null && row.totalChange > 0 ? warningColor : primaryColor,
+            align: "right",
+          },
+        },
+        {
+          text: percentageChangeLabel(row.totalChangePercentage),
+          options: {
+            ...baseOptions,
+            bold: true,
+            color:
+              row.totalChangePercentage !== null && row.totalChangePercentage > 0
+                ? warningColor
+                : primaryColor,
+            align: "center",
+          },
+        },
+      ];
+    });
+    return [header, ...body];
+  };
+
+  pages.forEach((page, pageIndex) => {
+    const slide = pres.addSlide();
+    addHeader(
+      slide,
+      page.first ? result.title : `${result.title} (continued ${pageIndex + 1})`,
+      primary,
+      secondary
+    );
+
+    let tableY = 1.25;
+    if (page.first) {
+      const summaryCards = [
+        {
+          label: "Employer annual impact",
+          value: signedCompactCurrency(result.summary.employerChange),
+          change: percentageChangeLabel(result.summary.employerChangePercentage),
+          detail: `${compactCurrency(result.summary.priorAnnualEmployerCost)} → ${compactCurrency(result.summary.currentAnnualEmployerCost)}`,
+        },
+        {
+          label: "Employee annual impact",
+          value: signedCompactCurrency(result.summary.employeeChange),
+          change: percentageChangeLabel(result.summary.employeeChangePercentage),
+          detail: `${compactCurrency(result.summary.priorAnnualEmployeeCost)} → ${compactCurrency(result.summary.currentAnnualEmployeeCost)}`,
+        },
+        {
+          label: "Total renewal impact",
+          value: signedCompactCurrency(result.summary.totalChange),
+          change: percentageChangeLabel(result.summary.totalChangePercentage),
+          detail: `${compactCurrency(result.summary.priorAnnualTotalCost)} → ${compactCurrency(result.summary.currentAnnualTotalCost)}`,
+        },
+        {
+          label: "Comparable rate rows",
+          value: String(result.comparableRows),
+          change: `${result.renamedRows} renamed`,
+          detail: `${result.newRows} new · ${result.removedRows} removed`,
+        },
+      ];
+      const margin = 0.48;
+      const gap = 0.16;
+      const cardW = (SLIDE_W - margin * 2 - gap * 3) / 4;
+      summaryCards.forEach((card, index) => {
+        const x = margin + index * (cardW + gap);
+        slide.addShape("roundRect", {
+          x,
+          y: 1.14,
+          w: cardW,
+          h: 1.05,
+          fill: { color: "F7F8F7" },
+          line: { color: "E2E5E3", pt: 0.6 },
+          rectRadius: 0.05,
+        });
+        slide.addText(card.value, {
+          x: x + 0.2,
+          y: 1.28,
+          w: 1.4,
+          h: 0.32,
+          fontSize: 18,
+          bold: true,
+          color:
+            index < 3 && card.value.startsWith("+") ? warningColor : primaryColor,
+          margin: 0,
+          fit: "shrink",
+        });
+        slide.addText(card.change, {
+          x: x + 1.58,
+          y: 1.34,
+          w: cardW - 1.78,
+          h: 0.18,
+          fontSize: 8.5,
+          bold: true,
+          color:
+            index < 3 && card.change.startsWith("+") ? warningColor : "5B6661",
+          align: "right",
+          margin: 0,
+          fit: "shrink",
+        });
+        slide.addText(card.label, {
+          x: x + 0.2,
+          y: 1.66,
+          w: cardW - 0.4,
+          h: 0.17,
+          fontSize: 8.7,
+          bold: true,
+          color: "273036",
+          margin: 0,
+        });
+        slide.addText(card.detail, {
+          x: x + 0.2,
+          y: 1.9,
+          w: cardW - 0.4,
+          h: 0.14,
+          fontSize: 7,
+          color: "6B7280",
+          margin: 0,
+          fit: "shrink",
+        });
+      });
+      tableY = 2.45;
+    }
+
+    if (page.rows.length) {
+      slide.addTable(tableRows(page.rows), {
+        x: 0.5,
+        y: tableY,
+        w: SLIDE_W - 1,
+        colW: [2.85, 1.35, 0.75, 2.2, 2.2, 1.65, 1.33],
+        rowH: 0.5,
+        border: { type: "solid", color: "E5E7EB", pt: 0.4 },
+        autoPage: false,
+        margin: 0.05,
+      });
+    } else {
+      slide.addText("Add policy rates to both plan years to calculate renewal changes.", {
+        x: 0.75,
+        y: 3.25,
+        w: SLIDE_W - 1.5,
+        h: 0.4,
+        fontSize: 14,
+        color: "6B7280",
+        align: "center",
+      });
+    }
+
+    if (page.first) {
+      slide.addText(result.note, {
+        x: 0.55,
+        y: 6.9,
+        w: SLIDE_W - 1.1,
+        h: 0.28,
+        fontSize: 7.5,
+        color: "6B7280",
+        margin: 0,
+        fit: "shrink",
+        align: "center",
+      });
+    }
+  });
+}
+
 function addStatsSlide(
   pres: PptxGenJS,
   result: Extract<ChartResult, { kind: "stats" }>,
@@ -1511,6 +1778,10 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
     if (result.kind === "executive") addExecutiveSummarySlide(pres, result, primary, secondary);
     else if (result.kind === "risk") addWorkforceRiskSlide(pres, result, primary, secondary);
     else if (result.kind === "quality") addDataQualitySlide(pres, result, primary, secondary);
+    else if (result.kind === "renewal") {
+      if (result.available)
+        addRenewalComparisonSlides(pres, result, primary, secondary);
+    }
     else if (result.kind === "participation")
       addBenefitsParticipationSlide(pres, result, primary, secondary);
     else if (result.kind === "contribution")

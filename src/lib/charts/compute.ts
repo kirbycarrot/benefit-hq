@@ -899,6 +899,10 @@ function annualizationFactor(ratePeriod: string): number {
   return 0;
 }
 
+function percentageChange(current: number, prior: number): number | null {
+  return prior === 0 ? null : ((current - prior) / prior) * 100;
+}
+
 function computeContributionStrategy(
   ds: ChartDataset
 ): Extract<ChartResult, { kind: "contribution" }> {
@@ -998,6 +1002,240 @@ function computeContributionStrategy(
     matchedElections,
     totalElections,
     note: `Annual estimates use enrolled elections matched by benefit, plan, and tier. Monthly rates are multiplied by 12; per-pay-period rates assume 26 pay periods; annual rates are used as entered.${totalElections > matchedElections ? ` ${totalElections - matchedElections} active election${totalElections - matchedElections === 1 ? " was" : "s were"} not matched to a rate row.` : ""}`,
+  };
+}
+
+function computeRenewalComparison(ds: ChartDataset): ChartResult {
+  const priorPlanYear = ds.comparisonPlanYear;
+  if (!priorPlanYear) {
+    return {
+      kind: "renewal",
+      available: false,
+      title: "Renewal Comparison",
+      message: "Add an earlier plan year to enable renewal comparison.",
+    };
+  }
+
+  const contribution = computeContributionStrategy(ds);
+  const currentEntries = ds.policyLines.map((line, index) => ({
+    line,
+    index,
+    enrolled: contribution.rows[index]?.enrolled ?? 0,
+  }));
+  const priorEntries = priorPlanYear.policyLines.map((line, index) => ({ line, index }));
+  const usedPrior = new Set<number>();
+  const pairs = new Map<
+    number,
+    { priorIndex: number; status: "matched" | "renamed" }
+  >();
+
+  const exactKey = (line: (typeof ds.policyLines)[number]) =>
+    [
+      normalizedMatchKey(line.coverageType),
+      normalizedMatchKey(line.planName),
+      line.tier,
+    ].join("|");
+  const benefitTierKey = (line: (typeof ds.policyLines)[number]) =>
+    [normalizedMatchKey(line.coverageType), line.tier].join("|");
+
+  for (const current of currentEntries) {
+    const key = exactKey(current.line);
+    const currentWithKey = currentEntries.filter((entry) => exactKey(entry.line) === key);
+    const priorCandidates = priorEntries.filter(
+      (entry) => !usedPrior.has(entry.index) && exactKey(entry.line) === key
+    );
+    if (currentWithKey.length !== 1 || priorCandidates.length !== 1) continue;
+    pairs.set(current.index, {
+      priorIndex: priorCandidates[0].index,
+      status: "matched",
+    });
+    usedPrior.add(priorCandidates[0].index);
+  }
+
+  const unmatchedCurrent = currentEntries.filter((entry) => !pairs.has(entry.index));
+  const unmatchedPrior = priorEntries.filter((entry) => !usedPrior.has(entry.index));
+  const fallbackKeys = new Set([
+    ...unmatchedCurrent.map((entry) => benefitTierKey(entry.line)),
+    ...unmatchedPrior.map((entry) => benefitTierKey(entry.line)),
+  ]);
+  for (const key of fallbackKeys) {
+    const currentCandidates = unmatchedCurrent.filter(
+      (entry) => !pairs.has(entry.index) && benefitTierKey(entry.line) === key
+    );
+    const priorCandidates = unmatchedPrior.filter(
+      (entry) => !usedPrior.has(entry.index) && benefitTierKey(entry.line) === key
+    );
+    if (currentCandidates.length !== 1 || priorCandidates.length !== 1) continue;
+    const current = currentCandidates[0];
+    const prior = priorCandidates[0];
+    pairs.set(current.index, {
+      priorIndex: prior.index,
+      status:
+        normalizedMatchKey(current.line.planName) === normalizedMatchKey(prior.line.planName)
+          ? "matched"
+          : "renamed",
+    });
+    usedPrior.add(prior.index);
+  }
+
+  type RenewalRow = Extract<
+    ChartResult,
+    { kind: "renewal"; available: true }
+  >["rows"][number];
+
+  const rows: RenewalRow[] = currentEntries.map((current) => {
+    const pair = pairs.get(current.index);
+    const prior = pair ? priorEntries[pair.priorIndex].line : null;
+    const currentEmployeeRate = Number(current.line.employeeCost);
+    const currentEmployerRate = Number(current.line.employerCost);
+    const currentFactor = annualizationFactor(current.line.ratePeriod);
+    const currentAnnualEmployeeCost =
+      currentEmployeeRate * currentFactor * current.enrolled;
+    const currentAnnualEmployerCost =
+      currentEmployerRate * currentFactor * current.enrolled;
+
+    if (!prior || !pair) {
+      return {
+        status: "new",
+        benefit: current.line.coverageType,
+        priorPlan: null,
+        currentPlan: current.line.planName,
+        tier: TIER_LABELS[current.line.tier as TierCode] ?? current.line.tier,
+        enrolled: current.enrolled,
+        priorEmployeeRate: null,
+        currentEmployeeRate,
+        priorEmployerRate: null,
+        currentEmployerRate,
+        priorRatePeriod: null,
+        currentRatePeriod: current.line.ratePeriod,
+        priorAnnualEmployeeCost: null,
+        currentAnnualEmployeeCost,
+        priorAnnualEmployerCost: null,
+        currentAnnualEmployerCost,
+        totalChange: null,
+        totalChangePercentage: null,
+      };
+    }
+
+    const priorEmployeeRate = Number(prior.employeeCost);
+    const priorEmployerRate = Number(prior.employerCost);
+    const priorFactor = annualizationFactor(prior.ratePeriod);
+    const priorAnnualEmployeeCost = priorEmployeeRate * priorFactor * current.enrolled;
+    const priorAnnualEmployerCost = priorEmployerRate * priorFactor * current.enrolled;
+    const priorAnnualTotalCost = priorAnnualEmployeeCost + priorAnnualEmployerCost;
+    const currentAnnualTotalCost =
+      currentAnnualEmployeeCost + currentAnnualEmployerCost;
+
+    return {
+      status: pair.status,
+      benefit: current.line.coverageType,
+      priorPlan: prior.planName,
+      currentPlan: current.line.planName,
+      tier: TIER_LABELS[current.line.tier as TierCode] ?? current.line.tier,
+      enrolled: current.enrolled,
+      priorEmployeeRate,
+      currentEmployeeRate,
+      priorEmployerRate,
+      currentEmployerRate,
+      priorRatePeriod: prior.ratePeriod,
+      currentRatePeriod: current.line.ratePeriod,
+      priorAnnualEmployeeCost,
+      currentAnnualEmployeeCost,
+      priorAnnualEmployerCost,
+      currentAnnualEmployerCost,
+      totalChange: currentAnnualTotalCost - priorAnnualTotalCost,
+      totalChangePercentage: percentageChange(
+        currentAnnualTotalCost,
+        priorAnnualTotalCost
+      ),
+    };
+  });
+
+  for (const prior of priorEntries.filter((entry) => !usedPrior.has(entry.index))) {
+    rows.push({
+      status: "removed",
+      benefit: prior.line.coverageType,
+      priorPlan: prior.line.planName,
+      currentPlan: null,
+      tier: TIER_LABELS[prior.line.tier as TierCode] ?? prior.line.tier,
+      enrolled: 0,
+      priorEmployeeRate: Number(prior.line.employeeCost),
+      currentEmployeeRate: null,
+      priorEmployerRate: Number(prior.line.employerCost),
+      currentEmployerRate: null,
+      priorRatePeriod: prior.line.ratePeriod,
+      currentRatePeriod: null,
+      priorAnnualEmployeeCost: null,
+      currentAnnualEmployeeCost: null,
+      priorAnnualEmployerCost: null,
+      currentAnnualEmployerCost: null,
+      totalChange: null,
+      totalChangePercentage: null,
+    });
+  }
+
+  const comparable = rows.filter(
+    (row) => row.status === "matched" || row.status === "renamed"
+  );
+  const priorAnnualEmployeeCost = comparable.reduce(
+    (sum, row) => sum + (row.priorAnnualEmployeeCost ?? 0),
+    0
+  );
+  const currentAnnualEmployeeCost = comparable.reduce(
+    (sum, row) => sum + (row.currentAnnualEmployeeCost ?? 0),
+    0
+  );
+  const priorAnnualEmployerCost = comparable.reduce(
+    (sum, row) => sum + (row.priorAnnualEmployerCost ?? 0),
+    0
+  );
+  const currentAnnualEmployerCost = comparable.reduce(
+    (sum, row) => sum + (row.currentAnnualEmployerCost ?? 0),
+    0
+  );
+  const priorAnnualTotalCost = priorAnnualEmployeeCost + priorAnnualEmployerCost;
+  const currentAnnualTotalCost = currentAnnualEmployeeCost + currentAnnualEmployerCost;
+  const newRows = rows.filter((row) => row.status === "new").length;
+  const removedRows = rows.filter((row) => row.status === "removed").length;
+  const renamedRows = rows.filter((row) => row.status === "renamed").length;
+
+  return {
+    kind: "renewal",
+    available: true,
+    title: `Renewal Comparison — ${priorPlanYear.label} to ${ds.label}`,
+    priorLabel: priorPlanYear.label,
+    currentLabel: ds.label,
+    priorEffectiveDate: priorPlanYear.effectiveDate,
+    currentEffectiveDate: ds.effectiveDate,
+    summary: {
+      priorAnnualEmployerCost,
+      currentAnnualEmployerCost,
+      employerChange: currentAnnualEmployerCost - priorAnnualEmployerCost,
+      employerChangePercentage: percentageChange(
+        currentAnnualEmployerCost,
+        priorAnnualEmployerCost
+      ),
+      priorAnnualEmployeeCost,
+      currentAnnualEmployeeCost,
+      employeeChange: currentAnnualEmployeeCost - priorAnnualEmployeeCost,
+      employeeChangePercentage: percentageChange(
+        currentAnnualEmployeeCost,
+        priorAnnualEmployeeCost
+      ),
+      priorAnnualTotalCost,
+      currentAnnualTotalCost,
+      totalChange: currentAnnualTotalCost - priorAnnualTotalCost,
+      totalChangePercentage: percentageChange(
+        currentAnnualTotalCost,
+        priorAnnualTotalCost
+      ),
+    },
+    rows,
+    comparableRows: comparable.length,
+    renamedRows,
+    newRows,
+    removedRows,
+    note: `Annual impact applies ${ds.label} enrollment to both rate sets for comparable rows, isolating rate changes from headcount changes.${newRows || removedRows ? ` ${newRows} new and ${removedRows} removed rate row${newRows + removedRows === 1 ? " is" : "s are"} excluded from the impact totals until uniquely matched.` : ""}${renamedRows ? ` ${renamedRows} uniquely paired row${renamedRows === 1 ? " was" : "s were"} treated as a plan rename.` : ""}`,
   };
 }
 
@@ -1127,6 +1365,7 @@ export const CHART_COMPUTE: Record<string, (ds: ChartDataset) => ChartResult> = 
   "waived-coverage-summary": computeWaivedCoverageSummary,
   "premium-summary-table": computePremiumSummaryTable,
   "contribution-strategy": computeContributionStrategy,
+  "renewal-comparison": computeRenewalComparison,
   "ancillary-volume-summary": computeAncillaryVolumeSummary,
   "gender-breakdown": computeGenderBreakdown,
   "employment-status-breakdown": computeEmploymentStatusBreakdown,
