@@ -62,6 +62,22 @@ npm start
 
 `npm start` listens on port `3030`. Place it behind an HTTPS reverse proxy such as Caddy and do not expose port `3030` directly to the internet.
 
+### First-time systemd setup
+
+The release workflow expects a systemd unit to keep Benefit HQ running and restart it after deployments or server reboots. On a new server, first prepare the production build without attempting a restart:
+
+```sh
+./scripts/deploy-release.sh --no-restart
+```
+
+Then run the one-time installer as the Linux user that owns the production checkout. Do not prefix this command with `sudo`; the installer requests sudo only when it installs and manages the system unit.
+
+```sh
+./scripts/install-systemd-service.sh
+```
+
+The installer detects the checkout, Linux user, Node.js, and npm paths; creates and enables `benefit-hq.service`; starts the application; and verifies `http://127.0.0.1:3030/login`. It refuses to replace an existing unit unless `--force` is explicitly supplied.
+
 ### Repeatable release deployment
 
 After the desired release has been pushed to GitHub, run the bundled deployment script from the production checkout:

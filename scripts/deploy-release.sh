@@ -126,7 +126,7 @@ if [[ $restart_service -eq 1 ]]; then
     if [[ $user_service -eq 1 ]]; then
       fail "systemd unit $service_name was not found; check available names with: systemctl --user list-unit-files --type=service"
     fi
-    fail "systemd unit $service_name was not found; check available names with: systemctl list-unit-files --type=service"
+    fail "systemd unit $service_name was not found; create it with: ./scripts/install-systemd-service.sh"
   fi
 fi
 
