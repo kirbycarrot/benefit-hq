@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 service_name="${BENEFIT_HQ_SERVICE:-benefit-hq.service}"
-health_url="${BENEFIT_HQ_HEALTH_URL:-http://127.0.0.1:3030/login}"
+port="${BENEFIT_HQ_PORT:-3030}"
+health_url="${BENEFIT_HQ_HEALTH_URL:-}"
 check_health=1
 force=0
 unit_temp=""
@@ -19,13 +20,17 @@ script requests sudo only for installing and managing the system service.
 
 Options:
   --service NAME       systemd unit name (default: benefit-hq.service)
-  --health-url URL     URL checked after startup (default: http://127.0.0.1:3030/login)
+  --port PORT          port the app should listen on (default: 3030). A port
+                       other than 3030 runs next start directly instead of
+                       npm start, so multiple tenant checkouts can share a host.
+  --health-url URL     URL checked after startup (default: http://127.0.0.1:<port>/login)
   --no-health-check    skip the post-start HTTP health check
   --force              replace an existing unit with the generated definition
   -h, --help           show this help
 
 Environment equivalents:
   BENEFIT_HQ_SERVICE
+  BENEFIT_HQ_PORT
   BENEFIT_HQ_HEALTH_URL
 EOF
 }
@@ -61,6 +66,11 @@ while [[ $# -gt 0 ]]; do
       service_name="$2"
       shift 2
       ;;
+    --port)
+      [[ $# -ge 2 ]] || fail "--port requires a value"
+      port="$2"
+      shift 2
+      ;;
     --health-url)
       [[ $# -ge 2 ]] || fail "--health-url requires a value"
       health_url="$2"
@@ -93,6 +103,9 @@ case "$service_name" in
     fail "--service must be a real unit name, not a documentation placeholder; omit --service to use benefit-hq.service"
     ;;
 esac
+[[ "$port" =~ ^[0-9]+$ && "$port" -ge 1 && "$port" -le 65535 ]] || \
+  fail "invalid port: $port"
+[[ -n "$health_url" ]] || health_url="http://127.0.0.1:$port/login"
 
 for required_command in curl cut dirname getent id install journalctl mktemp node npm rm rmdir sleep sudo systemctl systemd-analyze; do
   command -v "$required_command" >/dev/null 2>&1 || fail "missing required command: $required_command"
@@ -128,6 +141,19 @@ if sudo test -e "$unit_path" && [[ $force -eq 0 ]]; then
   fail "$unit_path already exists; inspect it first or rerun with --force"
 fi
 
+if [[ "$port" -eq 3030 ]]; then
+  exec_start_parts=("$npm_path" start)
+else
+  next_bin="$repo_root/node_modules/.bin/next"
+  [[ -x "$next_bin" ]] || fail "next executable not found at $next_bin; run npm ci first"
+  exec_start_parts=("$next_bin" start -p "$port")
+fi
+exec_start_line=""
+for part in "${exec_start_parts[@]}"; do
+  exec_start_line+="$(systemd_quote "$part") "
+done
+exec_start_line="${exec_start_line% }"
+
 unit_temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/benefit-hq-service.XXXXXX")"
 unit_temp="$unit_temp_dir/$service_name"
 {
@@ -143,7 +169,7 @@ unit_temp="$unit_temp_dir/$service_name"
   printf 'Environment=%s\n' "$(systemd_quote "HOME=$service_home")"
   printf 'Environment=%s\n' "$(systemd_quote "NODE_ENV=production")"
   printf 'Environment=%s\n' "$(systemd_quote "PATH=$runtime_path")"
-  printf 'ExecStart=%s start\n' "$(systemd_quote "$npm_path")"
+  printf 'ExecStart=%s\n' "$exec_start_line"
   printf 'Restart=on-failure\n'
   printf 'RestartSec=5s\n'
   printf 'TimeoutStopSec=30s\n'
@@ -199,5 +225,6 @@ printf '\nBenefit HQ systemd service installed successfully.\n'
 printf 'Unit:       %s\n' "$unit_path"
 printf 'User:       %s\n' "$service_user"
 printf 'Repository: %s\n' "$repo_root"
+printf 'Port:       %s\n' "$port"
 printf 'Health URL: %s\n' "$health_url"
 printf '\nFuture releases can use: ./scripts/deploy-release.sh\n'

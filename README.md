@@ -124,6 +124,18 @@ New logos are stored under `STORAGE_DIR/logos` and served only through an authen
 
 New storage directories and files are created with owner-only permissions. The service account should own `STORAGE_DIR`; do not place it on a broadly shared filesystem without equivalent access controls.
 
+### Multi-tenant deployments
+
+The data model is single-tenant: `User` and `Client` carry no organization/tenant field, so one installation serves one firm's shared workspace (see [Client lifecycle](#client-lifecycle)). To host another, separate firm, provision a second, fully independent installation rather than adding rows to the existing one:
+
+```sh
+./scripts/provision-tenant.sh acme
+```
+
+This clones a fresh checkout next to the current one, creates a dedicated Postgres role and database, generates a tenant-specific `.env` (its own `DATABASE_URL`, `AUTH_SECRET`, `BOOTSTRAP_TOKEN`, and `STORAGE_DIR`), builds and migrates it via `deploy-release.sh --no-restart`, and installs it as its own systemd service via `install-systemd-service.sh --port <port>` on the next unused port. It records each tenant it provisions in `<base-dir>/tenants.tsv`. It does not touch DNS or Caddy — it prints the `reverse_proxy` block to add for the new subdomain, matching the pattern already used for the primary instance's Caddy site. No DNS change is needed if the domain already has a wildcard record. Run `./scripts/provision-tenant.sh --help` for every option, including using an existing/managed Postgres instance via `--database-url` instead of local provisioning.
+
+Because each tenant is its own process and its own database, there is no data path between tenants — this is the same isolation as running the application on separate hosts, just consolidated onto one. The login-throttling caveat above still applies per tenant: if a single tenant is later scaled to more than one process, its rate limiting must move to the proxy or a shared store.
+
 ## Census import contract
 
 Benefit HQ accepts `.xlsx` workbooks up to 20 MB. The workbook is parsed in memory and is never saved to disk. SSNs may be used in memory to join ancillary rows to employees, but are discarded before persistence.
