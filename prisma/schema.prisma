@@ -22,16 +22,16 @@ model User {
 }
 
 model Client {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
   logoPath       String?
-  primaryColor   String   @default("#1F2937")
-  secondaryColor String   @default("#14B8A6")
+  primaryColor   String    @default("#1F2937")
+  secondaryColor String    @default("#14B8A6")
   createdById    String?
-  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   archivedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   planYears PlanYear[]
 
@@ -46,28 +46,98 @@ model PlanYear {
   effectiveDate DateTime
   createdAt     DateTime @default(now())
 
-  policyLines    PolicyLine[]
-  censusUploads  CensusUpload[]
-  employees      Employee[]
-  deckConfig     DeckConfig?
-  decks          Deck[]
+  policyLines     PolicyLine[]
+  benefitPrograms BenefitProgram[]
+  censusUploads   CensusUpload[]
+  employees       Employee[]
+  deckConfig      DeckConfig?
+  decks           Deck[]
 
   @@unique([clientId, label])
 }
 
 model PolicyLine {
-  id            String   @id @default(cuid())
-  planYearId    String
-  planYear      PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
-  coverageType  String // Medical | Dental | Vision | Life | STD | LTD
-  planName      String
-  tier          String // EE | EE+Spouse | EE+Child | Family
-  employeeCost  Decimal  @db.Decimal(10, 2)
-  employerCost  Decimal  @db.Decimal(10, 2)
-  totalPremium  Decimal  @db.Decimal(10, 2)
-  ratePeriod    String   @default("monthly")
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  planYearId   String
+  planYear     PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  coverageType String // Medical | Dental | Vision | Life | STD | LTD
+  planName     String
+  tier         String // EE | EE+Spouse | EE+Child | Family
+  employeeCost Decimal  @db.Decimal(10, 2)
+  employerCost Decimal  @db.Decimal(10, 2)
+  totalPremium Decimal  @db.Decimal(10, 2)
+  ratePeriod   String   @default("monthly")
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
+model BenefitProgram {
+  id          String   @id @default(cuid())
+  planYearId  String
+  planYear    PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  benefitType String // Medical | Dental | Vision | BasicLife | VoluntaryLife | STD | LTD
+  offered     Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plans BenefitPlan[]
+
+  @@unique([planYearId, benefitType])
+  @@index([planYearId, sortOrder])
+}
+
+model BenefitPlan {
+  id                  String         @id @default(cuid())
+  benefitProgramId    String
+  benefitProgram      BenefitProgram @relation(fields: [benefitProgramId], references: [id], onDelete: Cascade)
+  name                String
+  subtype             String
+  offered             Boolean        @default(true)
+  details             Json           @default("{}")
+  detailSchemaVersion Int            @default(1)
+  renewedFromPlanId   String?
+  renewedFromPlan     BenefitPlan?   @relation("BenefitPlanRenewal", fields: [renewedFromPlanId], references: [id], onDelete: SetNull)
+  renewals            BenefitPlan[]  @relation("BenefitPlanRenewal")
+  sortOrder           Int            @default(0)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  rates   PlanRate[]
+  aliases PlanAlias[]
+
+  @@index([benefitProgramId, sortOrder])
+  @@index([renewedFromPlanId])
+}
+
+model PlanRate {
+  id                   String      @id @default(cuid())
+  benefitPlanId        String
+  benefitPlan          BenefitPlan @relation(fields: [benefitPlanId], references: [id], onDelete: Cascade)
+  tier                 String // EE | EE+Spouse | EE+Child | Family | EE+Dependent | EE+Family
+  grossPremium         Decimal     @db.Decimal(10, 2)
+  employeeContribution Decimal     @db.Decimal(10, 2)
+  employerContribution Decimal     @db.Decimal(10, 2)
+  ratePeriod           String      @default("monthly")
+  enrollmentOverride   Int?
+  sortOrder            Int         @default(0)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@unique([benefitPlanId, tier])
+  @@index([benefitPlanId, sortOrder])
+}
+
+model PlanAlias {
+  id              String      @id @default(cuid())
+  benefitPlanId   String
+  benefitPlan     BenefitPlan @relation(fields: [benefitPlanId], references: [id], onDelete: Cascade)
+  alias           String
+  normalizedAlias String
+  createdAt       DateTime    @default(now())
+
+  @@unique([benefitPlanId, normalizedAlias])
+  @@index([normalizedAlias])
 }
 
 model CensusUpload {
@@ -141,10 +211,10 @@ model DeckConfig {
 }
 
 model Deck {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   planYearId  String
-  planYear    PlanYear  @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  planYear    PlanYear @relation(fields: [planYearId], references: [id], onDelete: Cascade)
   filePath    String?
   status      String // generating | ready | failed
-  generatedAt DateTime  @default(now())
+  generatedAt DateTime @default(now())
 }

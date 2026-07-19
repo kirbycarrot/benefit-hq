@@ -2,6 +2,7 @@ import type { ChartDataset } from "./dataset";
 import { ageInYears, tenureInYears } from "./dataset";
 import type { ChartResult } from "./types";
 import { RATE_PERIOD_LABELS, TIER_LABELS } from "@/lib/validation";
+import { POLICY_TIER_LABELS, type PolicyTierCode } from "@/lib/policy-details";
 import { lookupPostalGeography, normalizeUsZip } from "@/lib/geography/lookup";
 
 type Employee = ChartDataset["employees"][number];
@@ -91,6 +92,19 @@ function tierCodeFromOption(optionName: string | null): TierCode {
 
 function tierFromOption(optionName: string | null): string {
   return TIER_LABELS[tierCodeFromOption(optionName)];
+}
+
+function tierLabel(tier: string): string {
+  return POLICY_TIER_LABELS[tier as PolicyTierCode] ?? tier;
+}
+
+function rateTierMatches(rateTier: string, censusTier: TierCode): boolean {
+  if (rateTier === censusTier) return true;
+  if (rateTier === "EE+Dependent") {
+    return censusTier === "EE+Spouse" || censusTier === "EE+Child";
+  }
+  if (rateTier === "EE+Family") return censusTier !== "EE";
+  return false;
 }
 
 function isSpouseRelationship(relationshipType: string | null | undefined): boolean {
@@ -601,7 +615,7 @@ function computePremiumSummaryTable(ds: ChartDataset): ChartResult {
   const rows = ds.policyLines.map((line) => [
     line.coverageType,
     line.planName,
-    TIER_LABELS[line.tier as keyof typeof TIER_LABELS] ?? line.tier,
+    tierLabel(line.tier),
     `$${Number(line.employeeCost).toFixed(2)}`,
     `$${Number(line.employerCost).toFixed(2)}`,
     `$${Number(line.totalPremium).toFixed(2)}`,
@@ -845,17 +859,18 @@ function computeGeographicDistribution(ds: ChartDataset): ChartResult {
 }
 
 function computeCostByCoverageSummary(ds: ChartDataset): ChartResult {
+  const contribution = computeContributionStrategy(ds);
   const totals = new Map<string, { employeeCost: number; employerCost: number; totalPremium: number }>();
-  for (const line of ds.policyLines) {
-    const existing = totals.get(line.coverageType) ?? {
+  for (const row of contribution.rows) {
+    const existing = totals.get(row.benefit) ?? {
       employeeCost: 0,
       employerCost: 0,
       totalPremium: 0,
     };
-    existing.employeeCost += Number(line.employeeCost);
-    existing.employerCost += Number(line.employerCost);
-    existing.totalPremium += Number(line.totalPremium);
-    totals.set(line.coverageType, existing);
+    existing.employeeCost += row.annualEmployeeSpend;
+    existing.employerCost += row.annualEmployerSpend;
+    existing.totalPremium += row.annualTotalSpend;
+    totals.set(row.benefit, existing);
   }
   const rows = Array.from(totals.entries()).map(([coverageType, t]) => [
     coverageType,
@@ -865,22 +880,19 @@ function computeCostByCoverageSummary(ds: ChartDataset): ChartResult {
   ]);
   return {
     kind: "table",
-    title: `Cost Summary by Coverage Type (${RATE_PERIOD_LABELS[ds.policyLines[0]?.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? "Rate"})`,
-    columns: ["Coverage", "Employee cost", "Employer cost", "Total premium"],
+    title: "Estimated Annual Cost by Coverage Type",
+    columns: ["Coverage", "Employee cost", "Employer cost", "Total cost"],
     rows,
   };
 }
 
 function computeEmployerEmployeeCostSplit(ds: ChartDataset): ChartResult {
-  let employeeTotal = 0;
-  let employerTotal = 0;
-  for (const line of ds.policyLines) {
-    employeeTotal += Number(line.employeeCost);
-    employerTotal += Number(line.employerCost);
-  }
+  const contribution = computeContributionStrategy(ds);
+  const employeeTotal = contribution.annualEmployeeSpend;
+  const employerTotal = contribution.annualEmployerSpend;
   return {
     kind: "pie",
-    title: `Employer vs. Employee Cost Split (${RATE_PERIOD_LABELS[ds.policyLines[0]?.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? "Rate"})`,
+    title: "Estimated Annual Employer vs. Employee Cost Split",
     data: [
       { name: "Employer", value: Math.round(employerTotal * 100) / 100 },
       { name: "Employee", value: Math.round(employeeTotal * 100) / 100 },
@@ -914,7 +926,9 @@ function computeContributionStrategy(
       benefit: line.coverageType,
       plan: line.planName,
       tierCode: line.tier,
-      tier: TIER_LABELS[line.tier as TierCode] ?? line.tier,
+      tier: tierLabel(line.tier),
+      aliases: line.aliases ?? [],
+      enrollmentOverride: line.enrollmentOverride,
       enrolled: 0,
       employeeRate,
       employerRate,
@@ -947,11 +961,16 @@ function computeContributionStrategy(
       const tierCode = tierCodeFromOption(election.optionName);
       const tierCandidates = rows.filter(
         (row) =>
-          normalizedMatchKey(row.benefit) === benefitKey && row.tierCode === tierCode
+          normalizedMatchKey(row.benefit) === benefitKey &&
+          rateTierMatches(row.tierCode, tierCode)
       );
       const planKey = normalizedMatchKey(election.planName);
       const exactPlanCandidates = planKey
-        ? tierCandidates.filter((row) => normalizedMatchKey(row.plan) === planKey)
+        ? tierCandidates.filter(
+            (row) =>
+              normalizedMatchKey(row.plan) === planKey ||
+              row.aliases.some((alias) => normalizedMatchKey(alias) === planKey)
+          )
         : [];
 
       let matchedRow: (typeof rows)[number] | undefined;
@@ -965,6 +984,9 @@ function computeContributionStrategy(
   }
 
   for (const row of rows) {
+    if (row.enrollmentOverride !== null && row.enrollmentOverride !== undefined) {
+      row.enrolled = row.enrollmentOverride;
+    }
     const factor = annualizationFactor(row.ratePeriod);
     row.annualEmployeeSpend = row.employeeRate * factor * row.enrolled;
     row.annualEmployerSpend = row.employerRate * factor * row.enrolled;
@@ -1001,7 +1023,7 @@ function computeContributionStrategy(
     annualTotalSpend: annualEmployeeSpend + annualEmployerSpend,
     matchedElections,
     totalElections,
-    note: `Annual estimates use enrolled elections matched by benefit, plan, and tier. Monthly rates are multiplied by 12; per-pay-period rates assume 26 pay periods; annual rates are used as entered.${totalElections > matchedElections ? ` ${totalElections - matchedElections} active election${totalElections - matchedElections === 1 ? " was" : "s were"} not matched to a rate row.` : ""}`,
+    note: `Annual estimates use enrollment overrides when entered; otherwise they use census elections matched by benefit, plan alias, and tier. Monthly rates are multiplied by 12; per-pay-period rates assume 26 pay periods; annual rates are used as entered.${totalElections > matchedElections ? ` ${totalElections - matchedElections} active election${totalElections - matchedElections === 1 ? " was" : "s were"} not matched to a rate row.` : ""}`,
   };
 }
 
@@ -1039,6 +1061,27 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
     [normalizedMatchKey(line.coverageType), line.tier].join("|");
 
   for (const current of currentEntries) {
+    if (!current.line.renewedFromPlanId) continue;
+    const priorCandidates = priorEntries.filter(
+      (entry) =>
+        !usedPrior.has(entry.index) &&
+        entry.line.planId === current.line.renewedFromPlanId &&
+        entry.line.tier === current.line.tier
+    );
+    if (priorCandidates.length !== 1) continue;
+    const prior = priorCandidates[0];
+    pairs.set(current.index, {
+      priorIndex: prior.index,
+      status:
+        normalizedMatchKey(current.line.planName) === normalizedMatchKey(prior.line.planName)
+          ? "matched"
+          : "renamed",
+    });
+    usedPrior.add(prior.index);
+  }
+
+  for (const current of currentEntries) {
+    if (pairs.has(current.index)) continue;
     const key = exactKey(current.line);
     const currentWithKey = currentEntries.filter((entry) => exactKey(entry.line) === key);
     const priorCandidates = priorEntries.filter(
@@ -1100,7 +1143,7 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
         benefit: current.line.coverageType,
         priorPlan: null,
         currentPlan: current.line.planName,
-        tier: TIER_LABELS[current.line.tier as TierCode] ?? current.line.tier,
+        tier: tierLabel(current.line.tier),
         enrolled: current.enrolled,
         priorEmployeeRate: null,
         currentEmployeeRate,
@@ -1131,7 +1174,7 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
       benefit: current.line.coverageType,
       priorPlan: prior.planName,
       currentPlan: current.line.planName,
-      tier: TIER_LABELS[current.line.tier as TierCode] ?? current.line.tier,
+      tier: tierLabel(current.line.tier),
       enrolled: current.enrolled,
       priorEmployeeRate,
       currentEmployeeRate,
@@ -1157,7 +1200,7 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
       benefit: prior.line.coverageType,
       priorPlan: prior.line.planName,
       currentPlan: null,
-      tier: TIER_LABELS[prior.line.tier as TierCode] ?? prior.line.tier,
+      tier: tierLabel(prior.line.tier),
       enrolled: 0,
       priorEmployeeRate: Number(prior.line.employeeCost),
       currentEmployeeRate: null,

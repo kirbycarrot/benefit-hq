@@ -396,6 +396,35 @@ test("contribution strategy assumes 26 periods and recognizes full spouse tier n
   assert.equal(result.annualTotalSpend, 1040);
 });
 
+test("contribution strategy matches plan aliases and combined dependent tiers", () => {
+  const ds = dataset();
+  ds.employees[0].elections[0].planName = "Carrier PPO Option";
+  ds.employees[0].elections[0].optionName = "Employee + Spouse";
+  ds.policyLines[0].tier = "EE+Dependent";
+  ds.policyLines[0].aliases = ["Carrier PPO Option"];
+
+  const result = CHART_COMPUTE["contribution-strategy"](ds);
+
+  assert.equal(result.kind, "contribution");
+  if (result.kind !== "contribution") return;
+  assert.equal(result.matchedElections, 1);
+  assert.equal(result.rows[0].tier, "Employee + Dependent");
+  assert.equal(result.rows[0].enrolled, 1);
+});
+
+test("enrollment overrides control projected spend without hiding census match quality", () => {
+  const ds = dataset();
+  ds.policyLines[0].enrollmentOverride = 3;
+
+  const result = CHART_COMPUTE["contribution-strategy"](ds);
+
+  assert.equal(result.kind, "contribution");
+  if (result.kind !== "contribution") return;
+  assert.equal(result.matchedElections, 1);
+  assert.equal(result.rows[0].enrolled, 3);
+  assert.equal(result.annualTotalSpend, 18_000);
+});
+
 test("renewal comparison applies current enrollment to both rate sets", () => {
   const result = CHART_COMPUTE["renewal-comparison"](renewalDataset());
 

@@ -53,7 +53,7 @@ The seed command is required: it creates or updates the chart-definition catalog
 1. Create a client and optionally add its logo and primary and secondary brand colors. Client details stay collapsed when an existing client is opened because branding is normally configured only once.
 2. Create a plan year. The form proposes the next calendar year's **Plan Year** label and defaults its effective date to January 1 of that year.
 3. Upload the carrier census workbook. A successful upload atomically replaces the census previously stored for that plan year.
-4. Add policy lines and their employee and employer rates. Coverage tiers use the full Employee, Employee + Spouse, Employee + Child, and Family labels.
+4. Configure the benefits the client offers. Add plans or classes from census suggestions, copy a prior plan year, or add them manually; then enter the applicable rates and policy provisions.
 5. Open **Charts & tables** to review the analyses, enable or disable slides, and choose supported alternate views. Settings save to the plan year and are used by the PowerPoint generator.
 6. Select **Generate deck**, then use the displayed **Download PowerPoint** action when generation completes.
 
@@ -154,17 +154,21 @@ Workbook processing is bounded to 20 worksheets, 100,000 total rows, and 256 col
 
 Warnings shown after import should be reviewed before producing a client deck. In particular, unmatched ancillary records and missing birth dates affect chart accuracy.
 
-## Policy rates
+## Policy details and rates
 
-Employee and employer costs are entered with an explicit rate period: monthly, per pay period, or annual. All policy lines in one plan year must use the same period. Total premium is calculated server-side and the database enforces:
+Policy details use a benefit → plan/class → rate-tier structure. Medical, dental, and vision support an unlimited number of plans, two-, three-, or four-tier rates, explicit rate periods, optional enrollment overrides, and census aliases. Life and disability are class-based and store the applicable provisions without forcing irrelevant premium tiers. Plan-specific sections remain collapsed until needed, and conditional fields appear only for the selected plan type or funding arrangement.
 
-```text
-total premium = employee cost + employer cost
-```
+Gross premium and employee contribution are entered; employer contribution is derived at cent precision. The database enforces that the three amounts reconcile. Reporting annualizes monthly rates by 12, per-pay-period rates by 26, and annual rates as entered, then weights them by enrollment. An entered enrollment override controls projected spend while census matches remain visible in data-quality reporting.
 
-The rate period is included in premium tables and aggregate chart titles so unlike units are not presented as comparable totals.
+Census elections match policy rates by benefit, plan name or alias, and compatible tier. Combined Employee + Dependent and Employee + Family rate structures accept the corresponding detailed census tiers. A readiness panel surfaces missing rates and inconsistent limits before charts and deck generation.
 
-**Known gap — tier coverage vs. census tiers:** `computeContributionStrategy` (`src/lib/charts/compute.ts`) matches a census election to a policy line by benefit type + tier first, and only falls back to plan-name matching to disambiguate when a benefit+tier has more than one policy line. If Policy Details does not have a line for every tier actually present in the census (e.g. only "Employee" and "Employee + Spouse" are entered but the census also has "Employee + Child" and "Family" elections), those elections cannot match anything and are silently dropped from the enrolled/premium totals — surfaced only as a match-rate stat and a footnote sentence on the Employer vs. Employee Cost Strategy chart, not as an upfront warning. Worth revisiting when Policy Details is reworked: either require/prompt for a rate line per tier actually seen in the census, or surface the tier gap explicitly before deck generation rather than after.
+The additive migration retains and backfills the legacy `PolicyLine` table. Medical, dental, and vision saves continue synchronizing that table during the transition, so the previous application build remains usable if a code rollback is required.
+
+### Policy-details rollback
+
+Before the migration is deployed, rollback is only a code/branch switch. After deployment, the safest rollback is to deploy the previous application build and leave the four additive tables in place; the old build ignores them and reads the synchronized legacy rates. Do not drop the new tables after users have entered policy provisions unless the database has first been backed up, because the old flat model cannot represent those additional fields.
+
+The additive tables are `BenefitProgram`, `BenefitPlan`, `PlanRate`, and `PlanAlias`. If the migration was applied but no one has used the new editor, they can be dropped in dependency order (`PlanAlias`, `PlanRate`, `BenefitPlan`, `BenefitProgram`) before marking the migration rolled back. Production migration state should be changed only through the documented Prisma recovery procedure, not by deleting migration records manually.
 
 ## Charts, tables, and PowerPoint generation
 

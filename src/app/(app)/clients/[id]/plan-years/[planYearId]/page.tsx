@@ -1,9 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { PolicyLinesEditor } from "@/components/PolicyLinesEditor";
+import { PolicyDetailsEditor } from "@/components/PolicyDetailsEditor";
 import { CensusUploader } from "@/components/CensusUploader";
 import { formatDate } from "@/lib/date";
+import {
+  BENEFIT_TYPES,
+  inferPlanSubtype,
+  normalizePolicyName,
+  policyTierFromCensusOption,
+  type BenefitType,
+  type CensusPlanSuggestion,
+  type PolicyPlanDetails,
+  type PolicyProgramInput,
+  type RateBenefitType,
+} from "@/lib/policy-details";
 
 export default async function PlanYearDetailPage({
   params,
@@ -16,7 +27,18 @@ export default async function PlanYearDetailPage({
     where: { id: planYearId },
     include: {
       client: true,
-      policyLines: { orderBy: { createdAt: "asc" } },
+      benefitPrograms: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          plans: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              rates: { orderBy: { sortOrder: "asc" } },
+              aliases: { orderBy: { createdAt: "asc" } },
+            },
+          },
+        },
+      },
       censusUploads: { orderBy: { uploadedAt: "desc" }, take: 1 },
       decks: { orderBy: { generatedAt: "desc" } },
       _count: { select: { employees: true } },
@@ -26,17 +48,64 @@ export default async function PlanYearDetailPage({
   if (!planYear || planYear.clientId !== clientId) notFound();
 
   const latestUpload = planYear.censusUploads[0];
+  const [electionGroups, priorWithPrograms] = await Promise.all([
+    prisma.benefitElection.groupBy({
+      by: ["benefitType", "planName", "optionName"],
+      where: {
+        employee: { planYearId },
+        benefitType: { in: ["Medical", "Dental", "Vision"] },
+        planName: { not: null },
+      },
+      _count: { _all: true },
+    }),
+    planYear.benefitPrograms.length === 0
+      ? prisma.planYear.findFirst({
+          where: {
+            clientId,
+            effectiveDate: { lt: planYear.effectiveDate },
+            benefitPrograms: { some: {} },
+          },
+          orderBy: { effectiveDate: "desc" },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
-  const policyLines = planYear.policyLines.map((line) => ({
-    id: line.id,
-    coverageType: line.coverageType,
-    planName: line.planName,
-    tier: line.tier,
-    employeeCost: line.employeeCost.toFixed(2),
-    employerCost: line.employerCost.toFixed(2),
-    totalPremium: line.totalPremium.toFixed(2),
-    ratePeriod: line.ratePeriod,
-  }));
+  const initialPrograms: PolicyProgramInput[] = planYear.benefitPrograms
+    .filter((program) => isBenefitType(program.benefitType))
+    .map((program) => ({
+      benefitType: program.benefitType as BenefitType,
+      offered: program.offered,
+      plans: program.plans.map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        subtype: plan.subtype,
+        offered: plan.offered,
+        details: policyPlanDetails(plan.details),
+        detailSchemaVersion: 1,
+        renewedFromPlanId: plan.renewedFromPlanId,
+        sortOrder: plan.sortOrder,
+        aliases: plan.aliases.map((alias) => alias.alias),
+        rates: plan.rates.map((rate) => ({
+          tier: rate.tier as PolicyProgramInput["plans"][number]["rates"][number]["tier"],
+          grossPremium: rate.grossPremium.toNumber(),
+          employeeContribution: rate.employeeContribution.toNumber(),
+          ratePeriod: rate.ratePeriod as PolicyProgramInput["plans"][number]["rates"][number]["ratePeriod"],
+          enrollmentOverride: rate.enrollmentOverride ?? undefined,
+          sortOrder: rate.sortOrder,
+        })),
+      })),
+    }));
+  const censusSuggestions = buildCensusSuggestions(electionGroups);
+  const policyEditorVersion = planYear.benefitPrograms
+    .flatMap((program) => [
+      program.updatedAt.getTime(),
+      ...program.plans.flatMap((plan) => [
+        plan.updatedAt.getTime(),
+        ...plan.rates.map((rate) => rate.updatedAt.getTime()),
+      ]),
+    ])
+    .join(":");
 
   return (
     <div>
@@ -55,10 +124,17 @@ export default async function PlanYearDetailPage({
 
       <div id="policy-details" className="scroll-mt-8">
         <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Policy details</h2>
-        <p className="mb-[18px] text-sm text-text-600">
-          Enter coverage types, plan names, tiers, and premiums for this plan year.
+        <p className="mb-[18px] max-w-[760px] text-sm text-text-600">
+          Build only the benefits this client offers. Start from census elections or a prior plan year,
+          then expand each plan for rates and policy provisions as needed.
         </p>
-        <PolicyLinesEditor planYearId={planYear.id} initialPolicyLines={policyLines} />
+        <PolicyDetailsEditor
+          key={policyEditorVersion || "empty"}
+          planYearId={planYear.id}
+          initialPrograms={initialPrograms}
+          censusSuggestions={censusSuggestions}
+          canCopyPrior={Boolean(priorWithPrograms)}
+        />
       </div>
 
       <div id="census" className="mt-10 scroll-mt-8">
@@ -124,4 +200,57 @@ export default async function PlanYearDetailPage({
       </div>
     </div>
   );
+}
+
+function isBenefitType(value: string): value is BenefitType {
+  return BENEFIT_TYPES.includes(value as BenefitType);
+}
+
+function policyPlanDetails(value: unknown): PolicyPlanDetails {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
+      const item = entry[1];
+      return item === null || ["string", "number", "boolean"].includes(typeof item);
+    })
+  );
+}
+
+function buildCensusSuggestions(
+  groups: Array<{
+    benefitType: string;
+    planName: string | null;
+    optionName: string | null;
+    _count: { _all: number };
+  }>
+): CensusPlanSuggestion[] {
+  const suggestions = new Map<string, CensusPlanSuggestion>();
+
+  for (const group of groups) {
+    if (!group.planName || !isRateBenefit(group.benefitType)) continue;
+    if (/waive|declin|no coverage|not enrolled/i.test(`${group.planName} ${group.optionName ?? ""}`)) {
+      continue;
+    }
+    const key = `${group.benefitType}:${normalizePolicyName(group.planName)}`;
+    const suggestion = suggestions.get(key) ?? {
+      benefitType: group.benefitType,
+      planName: group.planName.trim(),
+      subtype: inferPlanSubtype(group.benefitType, group.planName),
+      tierEnrollments: {},
+    };
+    const tier = policyTierFromCensusOption(group.optionName);
+    suggestion.tierEnrollments[tier] =
+      (suggestion.tierEnrollments[tier] ?? 0) + group._count._all;
+    suggestions.set(key, suggestion);
+  }
+
+  return [...suggestions.values()].sort(
+    (left, right) =>
+      BENEFIT_TYPES.indexOf(left.benefitType) - BENEFIT_TYPES.indexOf(right.benefitType) ||
+      left.planName.localeCompare(right.planName)
+  );
+}
+
+function isRateBenefit(value: string): value is RateBenefitType {
+  return value === "Medical" || value === "Dental" || value === "Vision";
 }
