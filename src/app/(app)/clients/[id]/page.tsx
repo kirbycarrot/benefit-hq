@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { ClientForm } from "@/components/ClientForm";
 import { ClientDangerZone } from "@/components/ClientDangerZone";
 import { NewPlanYearForm } from "@/components/NewPlanYearForm";
 import { formatDate } from "@/lib/date";
+import {
+  computeOnboardingSummary,
+  formatRecurringDate,
+} from "@/lib/client-onboarding";
 
 export default async function ClientDetailPage({
   params,
@@ -17,12 +20,57 @@ export default async function ClientDetailPage({
     auth(),
     prisma.client.findUnique({
       where: { id },
-      include: { planYears: { orderBy: { effectiveDate: "desc" } } },
+      include: {
+        profile: true,
+        planYears: { orderBy: { effectiveDate: "desc" } },
+        locations: { where: { isHeadquarters: true }, take: 1 },
+        priorities: { orderBy: { rank: "asc" }, take: 3 },
+        _count: {
+          select: {
+            teamAssignments: true,
+            contacts: true,
+            documents: true,
+            priorities: true,
+          },
+        },
+      },
     }),
   ]);
   if (!client) notFound();
   const isAdmin = session?.user?.isAdmin ?? false;
   if (client.archivedAt && !isAdmin) notFound();
+  const profile = client.profile;
+  const headquarters = client.locations[0];
+  const progress = computeOnboardingSummary({
+    displayName: client.name,
+    legalName: profile?.legalName ?? null,
+    primaryIndustry: profile?.primaryIndustry ?? null,
+    primaryRenewalMonth: profile?.primaryRenewalMonth ?? null,
+    primaryRenewalDay: profile?.primaryRenewalDay ?? null,
+    headquartersComplete: Boolean(
+      headquarters?.line1 && headquarters.city && headquarters.state && headquarters.postalCode
+    ),
+    usEmployeeCount: profile?.usEmployeeCount ?? null,
+    benefitsEligibleCount: profile?.benefitsEligibleCount ?? null,
+    enrolledEmployeeCount: profile?.enrolledEmployeeCount ?? null,
+    teamAssignmentCount: client._count.teamAssignments,
+    contactCount: client._count.contacts,
+    entityStructure: profile?.entityStructure ?? null,
+    benefitsConsistentAcrossEntities: profile?.benefitsConsistentAcrossEntities ?? null,
+    hasUnionPopulation: profile?.hasUnionPopulation ?? null,
+    workforceTypes: jsonStringArray(profile?.workforceTypes),
+    coveredThroughPeo: profile?.coveredThroughPeo ?? null,
+    statesWithEmployees: jsonStringArray(profile?.statesWithEmployees),
+    benefitChallenges: profile?.benefitChallenges ?? null,
+    renewalSuccessOutcomes: profile?.renewalSuccessOutcomes ?? null,
+    disruptionTolerance: profile?.disruptionTolerance ?? null,
+    priorityCount: client._count.priorities,
+    documentCount: client._count.documents,
+  });
+  const renewalDate = formatRecurringDate(
+    profile?.primaryRenewalMonth ?? null,
+    profile?.primaryRenewalDay ?? null
+  );
 
   return (
     <div>
@@ -30,7 +78,8 @@ export default async function ClientDetailPage({
         &larr; Clients
       </Link>
 
-      <div className="mt-3.5 mb-7 flex items-start gap-4 sm:items-center">
+      <div className="mt-3.5 mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-4 sm:items-center">
         {client.logoPath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -57,7 +106,19 @@ export default async function ClientDetailPage({
               </span>
             )}
           </div>
+          {profile?.primaryIndustry && (
+            <p className="mt-1 text-sm text-text-600">{profile.primaryIndustry}{renewalDate ? ` · ${renewalDate} renewal` : ""}</p>
+          )}
         </div>
+        </div>
+        {!client.archivedAt && (
+          <Link
+            href={`/clients/${client.id}/edit`}
+            className="shrink-0 rounded-full border border-input-border bg-white px-4 py-2.5 text-[13px] font-semibold text-text-900 hover:border-text-300"
+          >
+            Edit client profile
+          </Link>
+        )}
       </div>
 
       {client.archivedAt ? (
@@ -73,36 +134,44 @@ export default async function ClientDetailPage({
             isArchived
           />
         </div>
-      ) : (
-        <details className="group mb-8 w-full max-w-[480px]">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-full border border-input-border bg-white px-4 py-2.5 text-[13px] font-semibold text-text-900 hover:border-text-300 [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">Edit client details</span>
-            <span className="hidden group-open:inline">Hide client details</span>
-          </summary>
-          <div className="mt-3 rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-7">
-            <ClientForm
-              mode="edit"
-              clientId={client.id}
-              initial={{
-                name: client.name,
-                primaryColor: client.primaryColor,
-                secondaryColor: client.secondaryColor,
-                logoPath: client.logoPath,
-              }}
-            />
-            {isAdmin && (
-              <ClientDangerZone
-                clientId={client.id}
-                clientName={client.name}
-                isArchived={false}
-              />
-            )}
-          </div>
-        </details>
-      )}
+      ) : null}
 
       {!client.archivedAt && (
-        <div>
+        <div className="space-y-9">
+          <section>
+            <div className="mb-3.5 flex items-center justify-between gap-4">
+              <h2 className="text-[17px] font-bold text-text-900">Client onboarding</h2>
+              <span className="text-sm font-extrabold text-text-900">{progress.percentage}% complete</span>
+            </div>
+            <div className="rounded-[14px] border border-border-light bg-white p-5 shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
+              <div className="h-2 overflow-hidden rounded-full bg-border-lighter">
+                <div className="h-full rounded-full bg-teal-deep" style={{ width: `${progress.percentage}%` }} />
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {Object.entries(progress.sections).map(([key, section]) => (
+                  <div key={key} className="rounded-[10px] bg-panel-tint px-3 py-3">
+                    <p className="text-xs font-semibold capitalize text-text-900">{sectionLabel(key)}</p>
+                    <p className="mt-1 text-[11px] text-text-400">{section.completed} of {section.total} complete</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-col gap-4 border-t border-border-lighter pt-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  {client.priorities.length > 0 ? (
+                    <>
+                      <p className="text-xs font-bold text-text-900">Top priorities</p>
+                      <p className="mt-1 text-xs text-text-600">{client.priorities.map((priority) => priority.objective).join(" · ")}</p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-text-600">Add strategic priorities and contacts as discovery continues.</p>
+                  )}
+                </div>
+                <Link href={`/clients/${client.id}/edit`} className="shrink-0 text-xs font-semibold text-link hover:text-link-hover">Continue onboarding &rarr;</Link>
+              </div>
+            </div>
+          </section>
+
+          <section>
           <div className="mb-3.5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-[17px] font-bold text-text-900">Plan years</h2>
             <NewPlanYearForm
@@ -134,8 +203,23 @@ export default async function ClientDetailPage({
               ))}
             </ul>
           )}
+          </section>
         </div>
       )}
     </div>
   );
+}
+
+function jsonStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function sectionLabel(key: string): string {
+  return {
+    profile: "Company profile",
+    team: "Team & contacts",
+    organization: "Organization",
+    goals: "Goals & constraints",
+    documents: "Documents",
+  }[key] ?? key;
 }

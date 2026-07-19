@@ -8,7 +8,7 @@ All authenticated users share the same clients and plan-year data. Administrator
 
 - Node.js 20 or newer
 - PostgreSQL
-- A persistent filesystem location for generated decks and uploaded logos
+- A persistent filesystem location for generated decks, client intake documents, and uploaded logos
 - A reverse proxy terminating HTTPS in production
 
 ## Configuration
@@ -27,7 +27,7 @@ Required variables:
 | `DATABASE_URL` | PostgreSQL connection string used by Prisma |
 | `AUTH_SECRET` | Random secret used by Auth.js to sign sessions |
 | `BOOTSTRAP_TOKEN` | One-time token required to create the first administrator |
-| `STORAGE_DIR` | Persistent private directory for decks and new logos; defaults to `./storage` |
+| `STORAGE_DIR` | Persistent private directory for decks, client intake documents, and new logos; defaults to `./storage` |
 
 `BOOTSTRAP_TOKEN` should be generated independently from `AUTH_SECRET`. Remove it from the runtime environment after the first administrator has been created. Later users are created by an administrator from **Settings**.
 
@@ -50,12 +50,13 @@ The seed command is required: it creates or updates the chart-definition catalog
 
 ## Product workflow
 
-1. Create a client and optionally add its logo and primary and secondary brand colors. Client details stay collapsed when an existing client is opened because branding is normally configured only once.
-2. Create a plan year. The form proposes the next calendar year's **Plan Year** label and defaults its effective date to January 1 of that year.
-3. Upload the carrier census workbook. A successful upload atomically replaces the census previously stored for that plan year.
-4. Configure the benefits the client offers. Add plans or classes from census suggestions, copy a prior plan year, or add them manually; then enter the applicable rates and policy provisions.
-5. Open **Charts & tables** to review the analyses, enable or disable slides, and choose supported alternate views. Settings save to the plan year and are used by the PowerPoint generator.
-6. Select **Generate deck**, then use the displayed **Download PowerPoint** action when generation completes.
+1. Create a client with its core identity, industry, renewal date, headquarters, and optional branding. The short setup creates the workspace and opens the guided onboarding profile.
+2. Complete the five onboarding sections progressively: company profile, internal team and client contacts, organization and locations, goals and constraints, and private source documents. The client overview shows completion progress and links back to the dedicated editor.
+3. Create a plan year. The form proposes the next calendar year's **Plan Year** label and defaults its effective date to January 1 of that year.
+4. Upload the carrier census workbook. A successful upload atomically replaces the census previously stored for that plan year.
+5. Configure the benefits the client offers. Add plans or classes from census suggestions, copy a prior plan year, or add them manually; then enter the applicable rates and policy provisions.
+6. Open **Charts & tables** to review the analyses, enable or disable slides, and choose supported alternate views. Settings save to the plan year and are used by the PowerPoint generator.
+7. Select **Generate deck**, then use the displayed **Download PowerPoint** action when generation completes.
 
 The application layout, navigation, forms, login screen, chart previews, and action controls are responsive across mobile and desktop widths.
 
@@ -120,7 +121,7 @@ The proxy or host firewall should also:
 - Preserve the original host and supply canonical client-IP headers.
 - Apply an additional coarse rate limit to `/api/auth/*` and `/api/register`.
 
-New logos are stored under `STORAGE_DIR/logos` and served only through an authenticated route. Generated decks are stored under `STORAGE_DIR/decks` and are also downloaded through an authenticated route. PNG, JPEG, and WebP logos are accepted after file-signature validation; SVG is deliberately rejected. Installations upgraded from older releases may still have legacy logos under `public/uploads/logos`, which should be included in backups until those logos are replaced.
+New logos are stored under `STORAGE_DIR/logos`, intake documents under `STORAGE_DIR/documents`, and generated decks under `STORAGE_DIR/decks`. All are served only through authenticated routes. Intake uploads are limited to 25 MB and accept validated PDF, Excel, Word, PowerPoint, CSV, and text files. PNG, JPEG, and WebP logos are accepted after file-signature validation; SVG is deliberately rejected. Installations upgraded from older releases may still have legacy logos under `public/uploads/logos`, which should be included in backups until those logos are replaced.
 
 New storage directories and files are created with owner-only permissions. The service account should own `STORAGE_DIR`; do not place it on a broadly shared filesystem without equivalent access controls.
 
@@ -217,9 +218,9 @@ Browser previews and PowerPoint slides use the same calculation results, but eac
 
 ## Client lifecycle
 
-Administrators can archive a client from the collapsed **Edit client details** area. Archived clients are hidden from the active list and shown to administrators in a separate recoverable list. Archived clients are read-only until restored.
+Administrators can archive a client from the danger zone at the bottom of the dedicated client profile editor. Archived clients are hidden from the active list and shown to administrators in a separate recoverable list. Archived clients are read-only until restored.
 
-Permanent deletion is also restricted to administrators and requires typing the exact client name. It cascades through plan years, census data, policy lines, chart settings, and deck records, then removes the client's managed logo and generated PowerPoint files from storage. Permanent deletion cannot be undone; use archive for normal offboarding and delete only when retention policy permits it.
+Permanent deletion is also restricted to administrators and requires typing the exact client name. It cascades through onboarding data, private intake documents, plan years, census data, policy lines, chart settings, and deck records, then removes the client's managed logo, intake uploads, and generated PowerPoint files from storage. Permanent deletion cannot be undone; use archive for normal offboarding and delete only when retention policy permits it.
 
 ## Quality checks
 
@@ -230,7 +231,7 @@ npx tsc --noEmit --incremental false
 npm run build
 ```
 
-The test suite covers census normalization and SSN disposal, atomic census rollback behavior, upload signatures, premium validation, bootstrap controls, authentication throttling primitives, chart calculations, renewal behavior, geography selection, alternate chart views, narrative titles, and data-derived presentation recommendations.
+The test suite covers client onboarding validation and progress, census normalization and SSN disposal, atomic census rollback behavior, upload signatures, premium validation, bootstrap controls, authentication throttling primitives, chart calculations, renewal behavior, geography selection, alternate chart views, narrative titles, and data-derived presentation recommendations.
 
 ## Application icons
 
@@ -244,7 +245,7 @@ Commit the regenerated icon files whenever the source brand mark changes.
 
 ## Backups and recovery
 
-Back up PostgreSQL and `STORAGE_DIR` on the same schedule. The database holds users, clients, employee census data, chart selections, and references to stored files; `STORAGE_DIR` holds the corresponding generated decks and logos. A database-only backup is not a complete recovery point.
+Back up PostgreSQL and `STORAGE_DIR` on the same schedule. The database holds users, clients, onboarding profiles, employee census data, chart selections, and references to stored files; `STORAGE_DIR` holds the corresponding generated decks, intake documents, and logos. A database-only backup is not a complete recovery point.
 
 A practical recovery procedure is:
 

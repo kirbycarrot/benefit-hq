@@ -118,8 +118,9 @@ export function ClientDangerZone({
         <form onSubmit={deleteClient} className="p-5 sm:p-7">
           <h2 className="text-xl font-extrabold text-text-900">Delete {clientName}?</h2>
           <p className="mt-3 text-sm leading-6 text-text-600">
-            This permanently deletes the client, all plan years, census data, policy
-            lines, chart settings, and generated decks. This action cannot be undone.
+            This permanently deletes the client, onboarding profile, contacts,
+            documents, all plan years, census data, policy details, chart settings,
+            and generated decks. This action cannot be undone.
           </p>
           <label className="mt-5 block text-xs font-semibold text-text-900">
             Type <span className="font-bold">{clientName}</span> to confirm

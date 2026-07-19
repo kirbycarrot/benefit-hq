@@ -105,6 +105,7 @@ export async function DELETE(
       name: true,
       logoPath: true,
       planYears: { select: { decks: { select: { filePath: true } } } },
+      documents: { select: { filePath: true } },
     },
   });
   if (!client) {
@@ -134,6 +135,7 @@ export async function DELETE(
   const cleanupResults = await Promise.allSettled([
     deleteLogoForUrl(client.logoPath),
     ...deckPaths.map((filePath) => deleteStoredFile(filePath)),
+    ...client.documents.map((document) => deleteStoredFile(document.filePath)),
   ]);
   if (cleanupResults.some((result) => result.status === "rejected")) {
     console.error("One or more stored assets could not be removed for a deleted client");

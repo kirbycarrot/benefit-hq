@@ -18,7 +18,9 @@ model User {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  clients Client[]
+  clients               Client[]
+  clientTeamAssignments ClientTeamAssignment[]
+  uploadedDocuments     ClientDocument[]
 }
 
 model Client {
@@ -33,7 +35,14 @@ model Client {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  planYears PlanYear[]
+  planYears       PlanYear[]
+  profile         ClientProfile?
+  teamAssignments ClientTeamAssignment[]
+  contacts        ClientContact[]
+  locations       ClientLocation[]
+  entities        ClientEntity[]
+  priorities      ClientPriority[]
+  documents       ClientDocument[]
 
   @@index([archivedAt])
 }
@@ -52,8 +61,165 @@ model PlanYear {
   employees       Employee[]
   deckConfig      DeckConfig?
   decks           Deck[]
+  documents       ClientDocument[]
 
   @@unique([clientId, label])
+}
+
+model ClientProfile {
+  id        String @id @default(cuid())
+  clientId  String @unique
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  legalName String
+
+  website               String?
+  primaryIndustry       String?
+  secondaryIndustry     String?
+  industryCode          String?
+  ownershipType         String?
+  parentCompany         String?
+  privateEquitySponsor  String?
+  fiscalYearEndMonth    Int?
+  fiscalYearEndDay      Int?
+  primaryRenewalMonth   Int?
+  primaryRenewalDay     Int?
+  usEmployeeCount       Int?
+  globalEmployeeCount   Int?
+  benefitsEligibleCount Int?
+  enrolledEmployeeCount Int?
+
+  entityStructure                  String?
+  numberOfEins                     Int?
+  benefitsConsistentAcrossEntities Boolean?
+  hasUnionPopulation               Boolean?
+  hasCollectivelyBargainedPlans    Boolean?
+  hasAcquiredCompanies             Boolean?
+  hasInternationalEmployees        Boolean?
+  workforceTypes                   Json     @default("[]")
+  coveredThroughPeo                Boolean?
+  statesWithEmployees              Json     @default("[]")
+  remoteEmployeePercentage         Decimal? @db.Decimal(5, 2)
+
+  benefitChallenges         String?
+  renewalSuccessOutcomes    String?
+  budgetTarget              Decimal? @db.Decimal(14, 2)
+  maximumAcceptableIncrease Decimal? @db.Decimal(5, 2)
+  disruptionTolerance       String?
+  excludedCarriers          Json     @default("[]")
+  acquisitionsExpected      Boolean?
+  headcountChangesExpected  Boolean?
+  harmonizationUnderway     Boolean?
+  preparingForTransaction   Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClientTeamAssignment {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, role])
+  @@index([userId])
+}
+
+model ClientContact {
+  id       String  @id @default(cuid())
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name     String
+  title    String?
+  email    String?
+  phone    String?
+  roles    Json    @default("[]")
+  notes    String?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, sortOrder])
+}
+
+model ClientLocation {
+  id             String  @id @default(cuid())
+  clientId       String
+  client         Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name           String
+  line1          String
+  line2          String?
+  city           String
+  state          String
+  postalCode     String
+  country        String  @default("United States")
+  isHeadquarters Boolean @default(false)
+  employeeCount  Int?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, sortOrder])
+}
+
+model ClientEntity {
+  id            String  @id @default(cuid())
+  clientId      String
+  client        Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  legalName     String
+  taxIdLastFour String?
+  notes         String?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, sortOrder])
+}
+
+model ClientPriority {
+  id             String  @id @default(cuid())
+  clientId       String
+  client         Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  objective      String
+  rank           Int
+  currentState   String?
+  desiredOutcome String?
+  measurementKpi String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, objective])
+  @@unique([clientId, rank])
+}
+
+model ClientDocument {
+  id               String    @id @default(cuid())
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  planYearId       String?
+  planYear         PlanYear? @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  category         String
+  originalFilename String
+  filePath         String
+  mediaType        String
+  sizeBytes        Int
+  uploadedById     String?
+  uploadedBy       User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt       DateTime  @default(now())
+
+  @@index([clientId, category])
+  @@index([planYearId])
+  @@index([uploadedById])
 }
 
 model PolicyLine {

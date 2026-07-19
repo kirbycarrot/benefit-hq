@@ -11,7 +11,7 @@ const LEGACY_LOGO_DIR = path.join(
   "uploads",
   "logos"
 );
-export type PrivateBucket = "decks" | "logos";
+export type PrivateBucket = "decks" | "documents" | "logos";
 
 function safeFilename(filename: string): string {
   const cleaned = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
