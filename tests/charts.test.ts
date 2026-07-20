@@ -222,6 +222,15 @@ test("premium chart output carries the rate period and enforced total", () => {
   assert.deepEqual(result.columns.slice(-2), ["Total premium", "Rate period"]);
   assert.equal(result.rows[0][2], "Employee");
   assert.deepEqual(result.rows[0].slice(-2), ["$500.00", "Monthly"]);
+
+  const largeDataset = dataset();
+  largeDataset.policyLines[0].employeeCost = 500 as never;
+  largeDataset.policyLines[0].employerCost = 1000 as never;
+  largeDataset.policyLines[0].totalPremium = 1500 as never;
+  const largeResult = CHART_COMPUTE["premium-summary-table"](largeDataset);
+  assert.equal(largeResult.kind, "table");
+  if (largeResult.kind !== "table") return;
+  assert.deepEqual(largeResult.rows[0].slice(-4, -1), ["$500.00", "$1,000.00", "$1,500.00"]);
 });
 
 test("headcount calculations include medical participation", () => {
@@ -363,7 +372,16 @@ test("benefits participation reconciles enrolled, waived, and unreported employe
 });
 
 test("contribution strategy matches elections to tiers and annualizes monthly rates", () => {
-  const result = CHART_COMPUTE["contribution-strategy"](dataset());
+  const ds = dataset();
+  ds.employees[0].elections.push({
+    id: "life-election",
+    employeeId: "employee",
+    benefitType: "Life",
+    planName: "Basic Life",
+    optionName: "Employee",
+    volume: 100_000 as never,
+  });
+  const result = CHART_COMPUTE["contribution-strategy"](ds);
 
   assert.equal(result.kind, "contribution");
   if (result.kind !== "contribution") return;
@@ -374,6 +392,9 @@ test("contribution strategy matches elections to tiers and annualizes monthly ra
   assert.equal(result.annualEmployeeSpend, 1500);
   assert.equal(result.annualEmployerSpend, 4500);
   assert.equal(result.annualTotalSpend, 6000);
+  assert.deepEqual(result.benefitMatchStats, [
+    { benefit: "Medical", matchedElections: 1, totalElections: 1 },
+  ]);
 });
 
 test("contribution strategy assumes 26 periods and recognizes full spouse tier names", () => {

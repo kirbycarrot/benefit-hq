@@ -4,6 +4,7 @@ import type { ChartResult } from "./types";
 import { RATE_PERIOD_LABELS, TIER_LABELS } from "@/lib/validation";
 import { POLICY_TIER_LABELS, type PolicyTierCode } from "@/lib/policy-details";
 import { lookupPostalGeography, normalizeUsZip } from "@/lib/geography/lookup";
+import { formatCurrency, formatWholeNumber } from "@/lib/number-format";
 
 type Employee = ChartDataset["employees"][number];
 type Election = Employee["elections"][number];
@@ -182,23 +183,23 @@ function computeExecutiveSummary(ds: ChartDataset): ChartResult {
   let footprintDetail = "No valid ZIP codes";
   if (stateCounts.size > 1) {
     footprintValue = `${stateCounts.size} states`;
-    footprintDetail = `${mappedEmployees} of ${total} employees mapped`;
+    footprintDetail = `${formatWholeNumber(mappedEmployees)} of ${formatWholeNumber(total)} employees mapped`;
   } else if (stateCounts.size === 1) {
     const state = [...stateCounts.values()][0];
     footprintValue = `${countyCounts.size} ${countyCounts.size === 1 ? "county" : "counties"}`;
-    footprintDetail = `${state.name} · ${mappedEmployees} of ${total} mapped`;
+    footprintDetail = `${state.name} · ${formatWholeNumber(mappedEmployees)} of ${formatWholeNumber(total)} mapped`;
   }
 
   const observations: string[] = [];
   if (stateCounts.size > 1) {
     const topState = [...stateCounts.values()].sort((a, b) => b.count - a.count)[0];
     observations.push(
-      `Employees span ${stateCounts.size} states; ${topState.name} has the largest concentration with ${topState.count} of ${mappedEmployees} mapped employees (${Math.round((topState.count / mappedEmployees) * 100)}%).`
+      `Employees span ${stateCounts.size} states; ${topState.name} has the largest concentration with ${formatWholeNumber(topState.count)} of ${formatWholeNumber(mappedEmployees)} mapped employees (${Math.round((topState.count / mappedEmployees) * 100)}%).`
     );
   } else if (stateCounts.size === 1 && countyCounts.size > 0) {
     const topCounty = [...countyCounts.values()].sort((a, b) => b.count - a.count)[0];
     observations.push(
-      `Employees span ${countyCounts.size} ${countyCounts.size === 1 ? "county" : "counties"} in ${topCounty.stateName}; ${topCounty.name} has the largest concentration with ${topCounty.count} of ${mappedEmployees} mapped employees (${Math.round((topCounty.count / mappedEmployees) * 100)}%).`
+      `Employees span ${countyCounts.size} ${countyCounts.size === 1 ? "county" : "counties"} in ${topCounty.stateName}; ${topCounty.name} has the largest concentration with ${formatWholeNumber(topCounty.count)} of ${formatWholeNumber(mappedEmployees)} mapped employees (${Math.round((topCounty.count / mappedEmployees) * 100)}%).`
     );
   } else {
     observations.push(
@@ -209,7 +210,7 @@ function computeExecutiveSummary(ds: ChartDataset): ChartResult {
   if (ages.length) {
     const topAgeBand = largestBand(ages, AGE_BANDS);
     observations.push(
-      `${topAgeBand.label.replace("-", "–")} is the largest age group, representing ${topAgeBand.count} of ${ages.length} employees with a recorded birth date (${Math.round((topAgeBand.count / ages.length) * 100)}%).`
+      `${topAgeBand.label.replace("-", "–")} is the largest age group, representing ${formatWholeNumber(topAgeBand.count)} of ${formatWholeNumber(ages.length)} employees with a recorded birth date (${Math.round((topAgeBand.count / ages.length) * 100)}%).`
     );
   } else {
     observations.push(
@@ -220,7 +221,7 @@ function computeExecutiveSummary(ds: ChartDataset): ChartResult {
   if (tenures.length) {
     const topTenureBand = largestBand(tenures, TENURE_BANDS);
     observations.push(
-      `${topTenureBand.label.replace("-", "–")} is the largest tenure group, representing ${topTenureBand.count} of ${tenures.length} employees with a recorded hire date (${Math.round((topTenureBand.count / tenures.length) * 100)}%).`
+      `${topTenureBand.label.replace("-", "–")} is the largest tenure group, representing ${formatWholeNumber(topTenureBand.count)} of ${formatWholeNumber(tenures.length)} employees with a recorded hire date (${Math.round((topTenureBand.count / tenures.length) * 100)}%).`
     );
   } else {
     observations.push(
@@ -232,22 +233,22 @@ function computeExecutiveSummary(ds: ChartDataset): ChartResult {
     kind: "executive",
     title: "Executive Summary",
     metrics: [
-      { label: "Total employees", value: String(total), detail: "Census headcount" },
+      { label: "Total employees", value: formatWholeNumber(total), detail: "Census headcount" },
       {
         label: "Average age",
         value: averageAge,
-        detail: `${ages.length} of ${total} records`,
+        detail: `${formatWholeNumber(ages.length)} of ${formatWholeNumber(total)} records`,
       },
       {
         label: "Average tenure",
         value: averageTenure,
-        detail: `${tenures.length} of ${total} records`,
+        detail: `${formatWholeNumber(tenures.length)} of ${formatWholeNumber(total)} records`,
       },
       { label: "Geographic footprint", value: footprintValue, detail: footprintDetail },
       {
         label: "Medical participation",
         value: pct(enrolledMedical, total),
-        detail: `${enrolledMedical} of ${total} enrolled`,
+        detail: `${formatWholeNumber(enrolledMedical)} of ${formatWholeNumber(total)} enrolled`,
       },
     ],
     observations,
@@ -305,13 +306,13 @@ function computeWorkforceRiskProfile(ds: ChartDataset): ChartResult {
 
   const observations = [
     tenureRecords.length
-      ? `${newHires} new hire${newHires === 1 ? "" : "s"} (${newHirePercentage.toFixed(1)}%) and ${established} established employee${established === 1 ? "" : "s"} (${establishedPercentage.toFixed(1)}%) show the current balance between onboarding and retained experience.`
+      ? `${formatWholeNumber(newHires)} new hire${newHires === 1 ? "" : "s"} (${newHirePercentage.toFixed(1)}%) and ${formatWholeNumber(established)} established employee${established === 1 ? "" : "s"} (${establishedPercentage.toFixed(1)}%) show the current balance between onboarding and retained experience.`
       : "New-hire and established-workforce indicators are unavailable because hire dates are missing.",
     ageRecords.length
-      ? `${medicareHorizon} employee${medicareHorizon === 1 ? " is" : "s are"} age 60–64, while ${age65Plus} ${age65Plus === 1 ? "is" : "are"} age 65 or older.`
+      ? `${formatWholeNumber(medicareHorizon)} employee${medicareHorizon === 1 ? " is" : "s are"} age 60–64, while ${formatWholeNumber(age65Plus)} ${age65Plus === 1 ? "is" : "are"} age 65 or older.`
       : "Age-horizon indicators are unavailable because birth dates are missing.",
     combinedRecords.length
-      ? `${continuityExposure} employee${continuityExposure === 1 ? "" : "s"} (${continuityPercentage.toFixed(1)}%) combine age 60+ with 10+ years of service, highlighting where continuity planning may have the greatest value.`
+      ? `${formatWholeNumber(continuityExposure)} employee${continuityExposure === 1 ? "" : "s"} (${continuityPercentage.toFixed(1)}%) combine age 60+ with 10+ years of service, highlighting where continuity planning may have the greatest value.`
       : "Continuity exposure is unavailable because no employee records contain both birth and hire dates.",
   ];
 
@@ -380,7 +381,7 @@ function computeHeadcountStatTiles(ds: ChartDataset): ChartResult {
     kind: "stats",
     title: "Census Snapshot",
     stats: [
-      { label: "Headcount", value: String(total) },
+      { label: "Headcount", value: formatWholeNumber(total) },
       {
         label: "Average age",
         value: ages.length ? (ages.reduce((a, b) => a + b, 0) / ages.length).toFixed(1) : "-",
@@ -616,9 +617,9 @@ function computePremiumSummaryTable(ds: ChartDataset): ChartResult {
     line.coverageType,
     line.planName,
     tierLabel(line.tier),
-    `$${Number(line.employeeCost).toFixed(2)}`,
-    `$${Number(line.employerCost).toFixed(2)}`,
-    `$${Number(line.totalPremium).toFixed(2)}`,
+    formatCurrency(Number(line.employeeCost)),
+    formatCurrency(Number(line.employerCost)),
+    formatCurrency(Number(line.totalPremium)),
     RATE_PERIOD_LABELS[line.ratePeriod as keyof typeof RATE_PERIOD_LABELS] ?? line.ratePeriod,
   ]);
   return {
@@ -655,7 +656,13 @@ function computeAncillaryVolumeSummary(ds: ChartDataset): ChartResult {
     const count = volumes.length;
     const totalVolume = volumes.reduce((a, b) => a + b, 0);
     const avgVolume = count ? totalVolume / count : 0;
-    return [label, count, pct(count, total), `$${avgVolume.toFixed(0)}`, `$${totalVolume.toFixed(0)}`];
+    return [
+      label,
+      count,
+      pct(count, total),
+      formatCurrency(avgVolume, 0),
+      formatCurrency(totalVolume, 0),
+    ];
   });
 
   return {
@@ -874,9 +881,9 @@ function computeCostByCoverageSummary(ds: ChartDataset): ChartResult {
   }
   const rows = Array.from(totals.entries()).map(([coverageType, t]) => [
     coverageType,
-    `$${t.employeeCost.toFixed(2)}`,
-    `$${t.employerCost.toFixed(2)}`,
-    `$${t.totalPremium.toFixed(2)}`,
+    formatCurrency(t.employeeCost),
+    formatCurrency(t.employerCost),
+    formatCurrency(t.totalPremium),
   ]);
   return {
     kind: "table",
@@ -942,6 +949,13 @@ function computeContributionStrategy(
 
   let totalElections = 0;
   let matchedElections = 0;
+  const rateBackedBenefitKeys = new Set(
+    rows.map((row) => normalizedMatchKey(row.benefit))
+  );
+  const benefitMatchStats = new Map<
+    string,
+    { benefit: string; matchedElections: number; totalElections: number }
+  >();
 
   for (const employee of ds.employees) {
     const electionsByBenefit = new Map<string, Election[]>();
@@ -955,9 +969,21 @@ function computeContributionStrategy(
     for (const elections of electionsByBenefit.values()) {
       const election = elections.find((item) => !isWaived(item));
       if (!election) continue;
-      totalElections++;
 
       const benefitKey = normalizedMatchKey(election.benefitType);
+      // Life and disability census elections support volume and participation
+      // analysis, but their policy records intentionally store provisions rather
+      // than tiered rates. Exclude them from premium-rate matching quality.
+      if (!rateBackedBenefitKeys.has(benefitKey)) continue;
+
+      totalElections++;
+      const benefitStats = benefitMatchStats.get(benefitKey) ?? {
+        benefit: election.benefitType,
+        matchedElections: 0,
+        totalElections: 0,
+      };
+      benefitStats.totalElections++;
+      benefitMatchStats.set(benefitKey, benefitStats);
       const tierCode = tierCodeFromOption(election.optionName);
       const tierCandidates = rows.filter(
         (row) =>
@@ -980,6 +1006,7 @@ function computeContributionStrategy(
       if (!matchedRow) continue;
       matchedRow.enrolled++;
       matchedElections++;
+      benefitStats.matchedElections++;
     }
   }
 
@@ -1023,6 +1050,7 @@ function computeContributionStrategy(
     annualTotalSpend: annualEmployeeSpend + annualEmployerSpend,
     matchedElections,
     totalElections,
+    benefitMatchStats: Array.from(benefitMatchStats.values()),
     note: `Annual estimates use enrollment overrides when entered; otherwise they use census elections matched by benefit, plan alias, and tier. Monthly rates are multiplied by 12; per-pay-period rates assume 26 pay periods; annual rates are used as entered.${totalElections > matchedElections ? ` ${totalElections - matchedElections} active election${totalElections - matchedElections === 1 ? " was" : "s were"} not matched to a rate row.` : ""}`,
   };
 }
@@ -1344,17 +1372,17 @@ function computeDataQualityAppendix(
       ? "No employee census records are available to audit."
       : largestGap.missing === 0
         ? "Birth date, hire date, ZIP, and salary are present for every employee."
-        : `${largestGap.label} has the largest completion gap: ${largestGap.missing} of ${totalEmployees} employee records are missing it.`,
+        : `${largestGap.label} has the largest completion gap: ${formatWholeNumber(largestGap.missing)} of ${formatWholeNumber(totalEmployees)} employee records are missing it.`,
     totalEmployees === 0
       ? "ZIP coverage is unavailable without employee records."
       : invalidRecordedZips > 0
-        ? `${validZipRecords} of ${totalEmployees} employees have a mappable ZIP; ${invalidRecordedZips} recorded ZIP${invalidRecordedZips === 1 ? " is" : "s are"} not recognized.`
-        : `${validZipRecords} of ${totalEmployees} employees have a mappable ZIP; ${totalEmployees - recordedZipRecords} ${totalEmployees - recordedZipRecords === 1 ? "record is" : "records are"} missing ZIP data.`,
+        ? `${formatWholeNumber(validZipRecords)} of ${formatWholeNumber(totalEmployees)} employees have a mappable ZIP; ${formatWholeNumber(invalidRecordedZips)} recorded ZIP${invalidRecordedZips === 1 ? " is" : "s are"} not recognized.`
+        : `${formatWholeNumber(validZipRecords)} of ${formatWholeNumber(totalEmployees)} employees have a mappable ZIP; ${formatWholeNumber(totalEmployees - recordedZipRecords)} ${totalEmployees - recordedZipRecords === 1 ? "record is" : "records are"} missing ZIP data.`,
     contribution.totalElections === 0
       ? "No active, non-waived plan elections are available for rate matching."
       : unmatchedElections === 0
-        ? `All ${contribution.totalElections} active plan elections match a policy rate row.`
-        : `${unmatchedElections} of ${contribution.totalElections} active plan elections do not match a unique policy rate row by benefit, plan, and tier.`,
+        ? `All ${formatWholeNumber(contribution.totalElections)} active plan elections match a policy rate row.`
+        : `${formatWholeNumber(unmatchedElections)} of ${formatWholeNumber(contribution.totalElections)} active plan elections do not match a unique policy rate row by benefit, plan, and tier.`,
   ];
 
   return {

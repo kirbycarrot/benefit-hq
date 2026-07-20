@@ -4,6 +4,7 @@ import {
   benefitProgramInputSchema,
   policyReadinessIssues,
   policyTierFromCensusOption,
+  selectedVoluntaryPlanOfferings,
   type PolicyProgramInput,
 } from "@/lib/policy-details";
 
@@ -53,6 +54,54 @@ test("employee contributions cannot exceed gross premium", () => {
   assert.equal(result.success, false);
   if (result.success) return;
   assert.match(result.error.issues[0].message, /cannot exceed gross premium/i);
+});
+
+test("aggregate stop-loss corridors may exceed 100 percent", () => {
+  const program = medicalProgram();
+  program.plans[0].details.fundingArrangement = "Self-Funded";
+  program.plans[0].details.aggregateCorridor = 125;
+
+  assert.equal(benefitProgramInputSchema.safeParse(program).success, true);
+
+  program.plans[0].details.aggregateCorridor = 501;
+  const result = benefitProgramInputSchema.safeParse(program);
+  assert.equal(result.success, false);
+  if (result.success) return;
+  assert.equal(
+    result.error.issues.some((issue) => /aggregate corridor cannot exceed 500%/i.test(issue.message)),
+    true
+  );
+});
+
+test("voluntary plan offerings persist as an informational checklist", () => {
+  const program: PolicyProgramInput = {
+    benefitType: "VoluntaryOfferings",
+    offered: true,
+    plans: [
+      {
+        name: "Additional Benefits Offered",
+        subtype: "Voluntary Offerings",
+        offered: true,
+        details: {
+          accident: true,
+          hospitalIndemnity: true,
+          petInsurance: false,
+        },
+        detailSchemaVersion: 1,
+        renewedFromPlanId: null,
+        sortOrder: 0,
+        aliases: [],
+        rates: [],
+      },
+    ],
+  };
+
+  assert.equal(benefitProgramInputSchema.safeParse(program).success, true);
+  assert.deepEqual(selectedVoluntaryPlanOfferings(program.plans[0].details), [
+    "Accident",
+    "Hospital indemnity",
+  ]);
+  assert.deepEqual(policyReadinessIssues([program]), []);
 });
 
 test("census aliases cannot ambiguously point to two plans", () => {

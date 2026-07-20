@@ -1,3 +1,63 @@
+export type BenchmarkChartMode = "cost" | "design" | "prevalence";
+
+export type BenchmarkChartPoint = {
+  value: number | null;
+  availability: "available" | "insufficient_data" | "not_reported" | "not_applicable";
+};
+
+export type BenchmarkChartRow = {
+  metricCode: string;
+  label: string;
+  tier: string | null;
+  unit: "percentage" | "currency_monthly" | "currency_annual" | "currency_pepy" | "count";
+  statistic: "average" | "median" | "prevalence";
+  clientValue: number | null;
+  national: BenchmarkChartPoint;
+  peer: BenchmarkChartPoint;
+  peerVariance: number | null;
+};
+
+export type BenchmarkChartPlan = {
+  id: string;
+  name: string;
+  subtype: string;
+  comparableCount: number;
+  possibleCount: number;
+  premiumRows: BenchmarkChartRow[];
+  contributionRows: BenchmarkChartRow[];
+  designRows: BenchmarkChartRow[];
+};
+
+export type BenchmarkMedicalCostPerEmployee =
+  | {
+      available: false;
+      matchRate: number;
+      message: string;
+    }
+  | {
+      available: true;
+      clientValue: number;
+      annualMedicalSpend: number;
+      employeeCount: number;
+      matchRate: number;
+      national: BenchmarkChartPoint;
+      peer: BenchmarkChartPoint;
+      nationalLabel: string;
+      peerLabel: string;
+      datasetTitle: string;
+      surveyYear: number;
+      version: string;
+    };
+
+type BenchmarkChartSource = {
+  datasetTitle: string;
+  surveyYear: number;
+  version: string;
+  nationalLabel: string;
+  peerLabel: string;
+  note: string;
+};
+
 export type ChartResult =
   | {
       kind: "executive";
@@ -39,6 +99,15 @@ export type ChartResult =
       annualTotalSpend: number;
       matchedElections: number;
       totalElections: number;
+      benefitMatchStats?: {
+        benefit: string;
+        matchedElections: number;
+        totalElections: number;
+      }[];
+      medicalCostPerEmployeeBenchmark?: Extract<
+        BenchmarkMedicalCostPerEmployee,
+        { available: true }
+      >;
       note: string;
     }
   | {
@@ -157,4 +226,39 @@ export type ChartResult =
       totalEmployees: number;
       mappedEmployees: number;
       note: string;
-    };
+    }
+  | {
+      kind: "benchmark";
+      available: false;
+      mode: BenchmarkChartMode;
+      title: string;
+      message: string;
+    }
+  | ({
+      kind: "benchmark";
+      available: true;
+      mode: "cost";
+      title: string;
+      plans: BenchmarkChartPlan[];
+      medicalCostPerEmployee: BenchmarkMedicalCostPerEmployee;
+    } & BenchmarkChartSource)
+  | ({
+      kind: "benchmark";
+      available: true;
+      mode: "design";
+      title: string;
+      plans: BenchmarkChartPlan[];
+    } & BenchmarkChartSource)
+  | ({
+      kind: "benchmark";
+      available: true;
+      mode: "prevalence";
+      title: string;
+      rows: Array<{
+        subtype: string;
+        label: string;
+        offered: boolean;
+        national: BenchmarkChartPoint;
+        peer: BenchmarkChartPoint;
+      }>;
+    } & BenchmarkChartSource);

@@ -18,6 +18,10 @@ test("chart catalog follows the presentation story order", () => {
   const sortOrders = CHART_DEFINITIONS.map((definition) => definition.sortOrder);
   assert.deepEqual(sortOrders, [...sortOrders].sort((left, right) => left - right));
   assert.equal(new Set(sortOrders).size, sortOrders.length);
+  assert.equal(
+    CHART_DEFINITIONS.some((definition) => definition.key.startsWith("mercer-")),
+    false
+  );
 });
 
 test("chart catalog defaults to the concise recommended deck", () => {

@@ -1,4 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
+import { formatNumber } from "@/lib/number-format";
 import type { ChartResult } from "./types";
 
 export function svgToPng(svg: string, scale = 2): Buffer {
@@ -78,7 +79,7 @@ export function renderBarChartSvg(
           notation: Math.abs(value) >= 10000 ? "compact" : "standard",
           maximumFractionDigits: Math.abs(value) >= 10000 ? 1 : 0,
         }).format(value)
-      : String(Math.round(value));
+      : Math.round(value).toLocaleString("en-US");
 
   let gridlines = "";
   let yLabels = "";
@@ -174,7 +175,7 @@ export function renderStackedBarChartSvg(
         maximumFractionDigits: Math.abs(value) >= 10000 ? 1 : 0,
       }).format(value);
     }
-    return String(Math.round(value));
+    return Math.round(value).toLocaleString("en-US");
   };
 
   let gridlines = "";
@@ -265,7 +266,7 @@ export function renderPieChartSvg(
         const lr = r * 0.65;
         return [cx + lr * Math.sin(rad), cy - lr * Math.cos(rad)];
       })();
-      labels += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="17" fill="${contrastText(color)}" font-family="${FONT}" font-weight="600">${d.value}</text>`;
+      labels += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="17" fill="${contrastText(color)}" font-family="${FONT}" font-weight="600">${esc(formatNumber(d.value))}</text>`;
     }
     angle = endAngle;
   });

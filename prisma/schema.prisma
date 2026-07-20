@@ -55,13 +55,14 @@ model PlanYear {
   effectiveDate DateTime
   createdAt     DateTime @default(now())
 
-  policyLines     PolicyLine[]
-  benefitPrograms BenefitProgram[]
-  censusUploads   CensusUpload[]
-  employees       Employee[]
-  deckConfig      DeckConfig?
-  decks           Deck[]
-  documents       ClientDocument[]
+  policyLines      PolicyLine[]
+  benefitPrograms  BenefitProgram[]
+  censusUploads    CensusUpload[]
+  employees        Employee[]
+  deckConfig       DeckConfig?
+  decks            Deck[]
+  documents        ClientDocument[]
+  benchmarkProfile PlanYearBenchmarkProfile?
 
   @@unique([clientId, label])
 }
@@ -383,4 +384,119 @@ model Deck {
   filePath    String?
   status      String // generating | ready | failed
   generatedAt DateTime @default(now())
+}
+
+model BenchmarkDataset {
+  id              String    @id @default(cuid())
+  provider        String
+  title           String
+  surveyYear      Int
+  publicationYear Int?
+  version         String
+  status          String    @default("draft") // draft | active | retired
+  sourceFilename  String
+  sourceChecksum  String
+  receivedAt      DateTime?
+  importedAt      DateTime  @default(now())
+  notes           String?
+
+  cohorts   BenchmarkCohort[]
+  values    BenchmarkValue[]
+  imports   BenchmarkImportRun[]
+  planYears PlanYearBenchmarkProfile[]
+
+  @@unique([provider, surveyYear, version])
+  @@index([status, surveyYear])
+}
+
+model BenchmarkCohort {
+  id               String           @id @default(cuid())
+  datasetId        String
+  dataset          BenchmarkDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  code             String
+  type             String // national | region | size | industry
+  label            String
+  shortLabel       String
+  sourceColumn     String
+  participantCount Int?
+  sortOrder        Int              @default(0)
+
+  values               BenchmarkValue[]
+  selectedForPlanYears PlanYearBenchmarkProfile[]
+
+  @@unique([datasetId, code])
+  @@index([datasetId, type, sortOrder])
+}
+
+model BenchmarkMetric {
+  id             String  @id @default(cuid())
+  code           String  @unique
+  category       String
+  label          String
+  description    String?
+  unit           String // percentage | currency_monthly | currency_annual | currency_pepy | count
+  statistic      String // average | median | prevalence
+  comparisonKind String  @default("direct") // direct | market_practice
+  benefitType    String?
+  planSubtype    String?
+  tier           String?
+  clientFieldKey String?
+  direction      String  @default("neutral") // lower | higher | neutral
+  sortOrder      Int     @default(0)
+
+  values BenchmarkValue[]
+
+  @@index([category, sortOrder])
+  @@index([benefitType, planSubtype])
+}
+
+model BenchmarkValue {
+  id           String           @id @default(cuid())
+  datasetId    String
+  dataset      BenchmarkDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  cohortId     String
+  cohort       BenchmarkCohort  @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  metricId     String
+  metric       BenchmarkMetric  @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  numericValue Decimal?         @db.Decimal(18, 6)
+  availability String           @default("available") // available | insufficient_data | not_reported | not_applicable
+  sourceCell   String
+  rawValue     String?
+
+  @@unique([datasetId, cohortId, metricId])
+  @@index([datasetId, metricId])
+  @@index([cohortId, metricId])
+}
+
+model BenchmarkImportRun {
+  id             String           @id @default(cuid())
+  datasetId      String
+  dataset        BenchmarkDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  status         String // running | succeeded | failed
+  sourceChecksum String
+  metricCount    Int              @default(0)
+  cohortCount    Int              @default(0)
+  valueCount     Int              @default(0)
+  warningCount   Int              @default(0)
+  warnings       Json             @default("[]")
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+
+  @@index([datasetId, startedAt])
+}
+
+model PlanYearBenchmarkProfile {
+  id              String           @id @default(cuid())
+  planYearId      String           @unique
+  planYear        PlanYear         @relation(fields: [planYearId], references: [id], onDelete: Cascade)
+  datasetId       String
+  dataset         BenchmarkDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  primaryCohortId String
+  primaryCohort   BenchmarkCohort  @relation(fields: [primaryCohortId], references: [id], onDelete: Restrict)
+  trendRate       Decimal?         @db.Decimal(7, 6)
+  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime         @default(now())
+
+  @@index([datasetId])
+  @@index([primaryCohortId])
 }

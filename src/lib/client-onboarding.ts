@@ -329,6 +329,7 @@ export type OnboardingProgress = {
   percentage: number;
   completed: number;
   total: number;
+  documentCount: number;
   sections: Record<OnboardingSectionKey, { completed: number; total: number; percentage: number }>;
 };
 
@@ -391,7 +392,7 @@ export function computeOnboardingSummary(input: {
   priorityCount: number;
   documentCount: number;
 }): OnboardingProgress {
-  const sections: OnboardingProgress["sections"] = {
+  const completionSections = {
     profile: score([
       Boolean(input.legalName),
       Boolean(input.displayName),
@@ -417,11 +418,26 @@ export function computeOnboardingSummary(input: {
       Boolean(input.disruptionTolerance),
       input.priorityCount > 0,
     ]),
-    documents: score([input.documentCount > 0]),
   };
-  const completed = Object.values(sections).reduce((sum, section) => sum + section.completed, 0);
-  const total = Object.values(sections).reduce((sum, section) => sum + section.total, 0);
-  return { percentage: percent(completed, total), completed, total, sections };
+  const completed = Object.values(completionSections).reduce(
+    (sum, section) => sum + section.completed,
+    0
+  );
+  const total = Object.values(completionSections).reduce(
+    (sum, section) => sum + section.total,
+    0
+  );
+  const sections: OnboardingProgress["sections"] = {
+    ...completionSections,
+    documents: { completed: 0, total: 0, percentage: 0 },
+  };
+  return {
+    percentage: percent(completed, total),
+    completed,
+    total,
+    documentCount: input.documentCount,
+    sections,
+  };
 }
 
 export function formatRecurringDate(month: number | null, day: number | null): string | null {

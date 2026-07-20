@@ -46,7 +46,7 @@ The development server is available at `http://localhost:3000`.
 
 Open `/register` for the initial setup, then enter the configured `BOOTSTRAP_TOKEN`. First-admin creation is serialized in PostgreSQL, so concurrent setup requests cannot create multiple bootstrap administrators.
 
-The seed command is required: it creates or updates the chart-definition catalog used by the chart selection screen and deck generator.
+The seed command is required: it creates or updates the chart-definition catalog used by the chart selection screen and deck generator, and imports the versioned Mercer benchmark dataset bundled with the release.
 
 ## Product workflow
 
@@ -159,6 +159,8 @@ Warnings shown after import should be reviewed before producing a client deck. I
 
 Policy details use a benefit → plan/class → rate-tier structure. Medical, dental, and vision support an unlimited number of plans, two-, three-, or four-tier rates, explicit rate periods, optional enrollment overrides, and census aliases. Life and disability are class-based and store the applicable provisions without forcing irrelevant premium tiers. Plan-specific sections remain collapsed until needed, and conditional fields appear only for the selected plan type or funding arrangement.
 
+The standalone **Voluntary Plan Offerings** section records additional benefits through a simple checklist. These selections have no rates, census matching, readiness requirements, or Mercer comparisons. When one or more offerings are selected, the generated presentation automatically includes an **Additional Benefits Offered** slide; otherwise that slide is omitted.
+
 Gross premium and employee contribution are entered; employer contribution is derived at cent precision. The database enforces that the three amounts reconcile. Reporting annualizes monthly rates by 12, per-pay-period rates by 26, and annual rates as entered, then weights them by enrollment. An entered enrollment override controls projected spend while census matches remain visible in data-quality reporting.
 
 Census elections match policy rates by benefit, plan name or alias, and compatible tier. Combined Employee + Dependent and Employee + Family rate structures accept the corresponding detailed census tiers. A readiness panel surfaces missing rates and inconsistent limits before charts and deck generation.
@@ -170,6 +172,26 @@ The additive migration retains and backfills the legacy `PolicyLine` table. Medi
 Before the migration is deployed, rollback is only a code/branch switch. After deployment, the safest rollback is to deploy the previous application build and leave the four additive tables in place; the old build ignores them and reads the synchronized legacy rates. Do not drop the new tables after users have entered policy provisions unless the database has first been backed up, because the old flat model cannot represent those additional fields.
 
 The additive tables are `BenefitProgram`, `BenefitPlan`, `PlanRate`, and `PlanAlias`. If the migration was applied but no one has used the new editor, they can be dropped in dependency order (`PlanAlias`, `PlanRate`, `BenefitPlan`, `BenefitProgram`) before marking the migration rolled back. Production migration state should be changed only through the documented Prisma recovery procedure, not by deleting migration records manually.
+
+## Mercer market benchmarking
+
+Each medical plan year retains an advanced **Benchmark QA** workspace for internal exploration. It compares the client's calculated plan rates and provisions with the national Mercer baseline and one focused peer cohort. The application recommends an industry, employer-size, or geographic cohort when the client profile supports it; an advanced override can save a different choice without changing the source data. A comparison is shown only when the company value can be calculated and at least one corresponding Mercer value exists; missing values are never estimated or substituted.
+
+The **Charts & tables** screen contains only company analyses. Matching Mercer context is applied automatically after the contribution strategy and medical plan-enrollment analyses rather than appearing as a selectable benchmark workflow or separate Mercer section. Cost per employee is shown only when at least 90% of active medical elections match policy rates. Unavailable comparisons are omitted quietly, while displayed comparisons retain the national baseline, saved peer cohort, dataset version, and methodology note.
+
+The committed benchmark file is versioned independently from plan-year data. Seeding imports it transactionally and records the source workbook checksum, import time, metric count, and cohort count. A later Mercer release can therefore coexist with historical comparisons instead of silently changing prior results.
+
+To regenerate the bundled 2025 dataset from an authorized copy of the source workbook:
+
+```sh
+python3 scripts/extract-mercer-benchmark.py \
+  --workbook "/path/to/Alliant BOB - BM Tool - 2026v2.xlsm" \
+  --manifest prisma/data/mercer-2025-manifest.json \
+  --output prisma/data/mercer-2025.json
+npm run db:seed
+```
+
+The extractor reads the workbook as ZIP/XML and never modifies it. Review the generated warnings and diff before committing a replacement dataset. Treat both the source workbook and extracted benchmark values as licensed, confidential business data.
 
 ## Charts, tables, and PowerPoint generation
 
@@ -185,6 +207,7 @@ The concise default presentation includes:
 - **Workforce Risk & Continuity Profile** combining age and tenure into new-hire, established-workforce, Medicare-horizon, and continuity indicators.
 - **Workforce Geography**, which uses a state heat map when employees span multiple states, drills into counties when they are concentrated in one state, and falls back to a ZIP summary when a map would add no useful detail.
 - **Dependent Profile** and **Ancillary Benefits** summaries when matching source data is available.
+- **Additional Benefits Offered** when the plan year includes one or more voluntary-plan checklist selections.
 - **Data Quality Appendix** covering core census completeness, valid ZIP coverage, unmatched elections, and missing dates or salaries.
 
 Additional demographic, enrollment, premium, dependent, and ancillary charts remain available in the catalog but are disabled by default to keep the standard deck concise.

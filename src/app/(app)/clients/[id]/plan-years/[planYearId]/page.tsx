@@ -164,6 +164,15 @@ export default async function PlanYearDetailPage({
         >
           Choose charts &amp; tables
         </Link>
+        <p className="mt-3 text-xs text-text-400">
+          Mercer context is applied automatically when a matching company metric is available.{" "}
+          <Link
+            href={`/clients/${clientId}/plan-years/${planYearId}/benchmarking`}
+            className="font-semibold text-text-600 underline decoration-border-light underline-offset-2 hover:text-text-900"
+          >
+            Advanced benchmark QA
+          </Link>
+        </p>
 
         {planYear.decks.length > 0 && (
           <div className="mt-6">

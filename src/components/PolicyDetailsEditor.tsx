@@ -10,6 +10,9 @@ import {
   POLICY_TIER_LABELS,
   TIER_TEMPLATE_LABELS,
   TIER_TEMPLATES,
+  VOLUNTARY_OFFERINGS_PLAN_NAME,
+  VOLUNTARY_OFFERINGS_PLAN_SUBTYPE,
+  VOLUNTARY_PLAN_OFFERINGS,
   type BenefitType,
   type CensusPlanSuggestion,
   type PolicyDetailField,
@@ -23,12 +26,14 @@ import {
   isRateBenefitType,
   normalizePolicyName,
   policyReadinessIssues,
+  selectedVoluntaryPlanOfferings,
   visibleDetailGroups,
 } from "@/lib/policy-details";
 import { RATE_PERIOD_LABELS, RATE_PERIODS } from "@/lib/validation";
 
 type EditorPlan = PolicyPlanInput & { clientKey: string };
 type EditorProgram = Omit<PolicyProgramInput, "plans"> & { plans: EditorPlan[] };
+type VoluntaryOfferingKey = (typeof VOLUNTARY_PLAN_OFFERINGS)[number]["key"];
 
 const inputClass =
   "h-11 w-full rounded-[10px] border border-input-border bg-white px-3 text-[13px] text-text-900 focus:border-teal-deep focus:outline-none";
@@ -289,7 +294,9 @@ export function PolicyDetailsEditor({
                 {BENEFIT_META[program.benefitType].label}
               </span>
               <span className="mt-1 block text-xs text-text-600">
-                {program.plans.length} {program.plans.length === 1 ? "plan/class" : "plans/classes"}
+                {program.benefitType === "VoluntaryOfferings"
+                  ? `${selectedVoluntaryPlanOfferings(program.plans[0]?.details).length} selected`
+                  : `${program.plans.length} ${program.plans.length === 1 ? "plan/class" : "plans/classes"}`}
               </span>
               <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.className}`}>
                 {dirtyBenefits.has(program.benefitType) ? "Unsaved changes" : status.label}
@@ -307,65 +314,82 @@ export function PolicyDetailsEditor({
                 <h3 className="text-lg font-extrabold text-text-900">
                   {BENEFIT_META[activeBenefit].label}
                 </h3>
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-text-600">
-                  <input
-                    type="checkbox"
-                    checked={activeProgram.offered}
-                    onChange={(event) =>
-                      updateProgram(activeBenefit, (program) => ({
-                        ...program,
-                        offered: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 accent-teal-deep"
-                  />
-                  Offered
-                </label>
+                {activeBenefit !== "VoluntaryOfferings" && (
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-text-600">
+                    <input
+                      type="checkbox"
+                      checked={activeProgram.offered}
+                      onChange={(event) =>
+                        updateProgram(activeBenefit, (program) => ({
+                          ...program,
+                          offered: event.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 accent-teal-deep"
+                    />
+                    Offered
+                  </label>
+                )}
               </div>
               <p className="mt-1 text-sm text-text-600">
                 {BENEFIT_META[activeBenefit].description}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {isRateBenefitType(activeBenefit) && addableSuggestions.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => addCensusPlans(activeBenefit)}
-                  className="h-10 rounded-full border border-input-border bg-white px-4 text-xs font-semibold text-text-900 hover:border-teal-deep"
-                >
-                  Add {addableSuggestions.length} from census
-                </button>
-              )}
-              <AddPlanButton benefitType={activeBenefit} onAdd={addPlan} />
-            </div>
+            {activeBenefit !== "VoluntaryOfferings" && (
+              <div className="flex flex-wrap gap-2">
+                {isRateBenefitType(activeBenefit) && addableSuggestions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => addCensusPlans(activeBenefit)}
+                    className="h-10 rounded-full border border-input-border bg-white px-4 text-xs font-semibold text-text-900 hover:border-teal-deep"
+                  >
+                    Add {addableSuggestions.length} from census
+                  </button>
+                )}
+                <AddPlanButton benefitType={activeBenefit} onAdd={addPlan} />
+              </div>
+            )}
           </div>
         </div>
 
         <div className="space-y-4 p-4 sm:p-6">
-          {!activeProgram.offered && (
-            <div className="rounded-[12px] border border-dashed border-input-border bg-panel-tint px-4 py-5 text-sm text-text-600">
-              This benefit is currently marked not offered. Existing plan details are retained and can be re-enabled later.
-            </div>
-          )}
-
-          {activeProgram.plans.length === 0 ? (
-            <div className="rounded-[12px] border border-dashed border-input-border px-5 py-10 text-center">
-              <p className="text-sm font-semibold text-text-900">No plans or classes yet</p>
-              <p className="mt-1 text-xs text-text-600">
-                Add only what the client offers; more plans can be added at any time.
-              </p>
-            </div>
+          {activeBenefit === "VoluntaryOfferings" ? (
+            <VoluntaryOfferingsChecklist
+              program={activeProgram}
+              onChange={(key, checked) =>
+                updateProgram("VoluntaryOfferings", (program) =>
+                  updateVoluntaryOffering(program, key, checked)
+                )
+              }
+            />
           ) : (
-            activeProgram.plans.map((plan) => (
-              <PlanCard
-                key={plan.clientKey}
-                benefitType={activeBenefit}
-                plan={plan}
-                onChange={(updater) => updatePlan(plan.clientKey, updater)}
-                onDuplicate={() => duplicatePlan(plan)}
-                onRemove={() => removePlan(plan.clientKey)}
-              />
-            ))
+            <>
+              {!activeProgram.offered && (
+                <div className="rounded-[12px] border border-dashed border-input-border bg-panel-tint px-4 py-5 text-sm text-text-600">
+                  This benefit is currently marked not offered. Existing plan details are retained and can be re-enabled later.
+                </div>
+              )}
+
+              {activeProgram.plans.length === 0 ? (
+                <div className="rounded-[12px] border border-dashed border-input-border px-5 py-10 text-center">
+                  <p className="text-sm font-semibold text-text-900">No plans or classes yet</p>
+                  <p className="mt-1 text-xs text-text-600">
+                    Add only what the client offers; more plans can be added at any time.
+                  </p>
+                </div>
+              ) : (
+                activeProgram.plans.map((plan) => (
+                  <PlanCard
+                    key={plan.clientKey}
+                    benefitType={activeBenefit}
+                    plan={plan}
+                    onChange={(updater) => updatePlan(plan.clientKey, updater)}
+                    onDuplicate={() => duplicatePlan(plan)}
+                    onRemove={() => removePlan(plan.clientKey)}
+                  />
+                ))
+              )}
+            </>
           )}
 
           <div className="flex flex-col gap-3 border-t border-border-lighter pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -771,7 +795,7 @@ function DetailFieldInput({
         <input
           type="number"
           min="0"
-          max={field.type === "percent" ? "100" : undefined}
+          max={field.type === "percent" ? String(field.max ?? 100) : field.max}
           step={field.type === "currency" ? "0.01" : field.type === "percent" ? "0.1" : "1"}
           value={typeof value === "number" ? value : ""}
           onChange={(event) =>
@@ -811,6 +835,44 @@ function CurrencyInput({
         onChange={(event) => onChange(event.target.value === "" ? 0 : Number(event.target.value))}
         className="h-9 w-full min-w-[125px] rounded-lg border border-input-border pr-2 pl-6 text-right text-[13px] focus:border-teal-deep focus:outline-none"
       />
+    </div>
+  );
+}
+
+function VoluntaryOfferingsChecklist({
+  program,
+  onChange,
+}: {
+  program: EditorProgram;
+  onChange: (key: VoluntaryOfferingKey, checked: boolean) => void;
+}) {
+  const details = program.plans[0]?.details ?? {};
+  const selectedCount = selectedVoluntaryPlanOfferings(details).length;
+
+  return (
+    <div>
+      <p className="max-w-[820px] text-sm leading-6 text-text-600">
+        Select every additional benefit currently offered. This checklist is informational and does not create rates, census requirements, or Mercer comparisons.
+      </p>
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {VOLUNTARY_PLAN_OFFERINGS.map((offering) => (
+          <label
+            key={offering.key}
+            className="flex cursor-pointer items-start gap-3 rounded-[11px] border border-border-lighter bg-panel-tint px-3.5 py-3 text-sm text-text-900 hover:border-input-border"
+          >
+            <input
+              type="checkbox"
+              checked={details[offering.key] === true}
+              onChange={(event) => onChange(offering.key, event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-teal-deep"
+            />
+            <span className="font-semibold leading-5">{offering.label}</span>
+          </label>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-text-400">
+        {selectedCount} {selectedCount === 1 ? "offering" : "offerings"} selected. The generated deck includes an Additional Benefits Offered slide when this count is greater than zero.
+      </p>
     </div>
   );
 }
@@ -856,15 +918,49 @@ function ReadinessPanel({
 function initializePrograms(initialPrograms: PolicyProgramInput[]): EditorProgram[] {
   return BENEFIT_TYPES.map((benefitType) => {
     const existing = initialPrograms.find((program) => program.benefitType === benefitType);
+    const plans = (existing?.plans ?? []).map((plan) => ({
+      ...plan,
+      clientKey: plan.id ?? makeClientKey(),
+    }));
+    if (benefitType === "VoluntaryOfferings" && plans.length === 0) {
+      plans.push(createVoluntaryOfferingsPlan());
+    }
     return {
       benefitType,
       offered: existing?.offered ?? false,
-      plans: (existing?.plans ?? []).map((plan) => ({
-        ...plan,
-        clientKey: plan.id ?? makeClientKey(),
-      })),
+      plans,
     };
   });
+}
+
+function createVoluntaryOfferingsPlan(): EditorPlan {
+  return {
+    clientKey: makeClientKey(),
+    name: VOLUNTARY_OFFERINGS_PLAN_NAME,
+    subtype: VOLUNTARY_OFFERINGS_PLAN_SUBTYPE,
+    offered: true,
+    details: {},
+    detailSchemaVersion: 1,
+    renewedFromPlanId: null,
+    sortOrder: 0,
+    aliases: [],
+    rates: [],
+  };
+}
+
+function updateVoluntaryOffering(
+  program: EditorProgram,
+  key: VoluntaryOfferingKey,
+  checked: boolean
+): EditorProgram {
+  const currentPlan = program.plans[0] ?? createVoluntaryOfferingsPlan();
+  const details = { ...currentPlan.details, [key]: checked };
+  const offered = selectedVoluntaryPlanOfferings(details).length > 0;
+  return {
+    ...program,
+    offered,
+    plans: [{ ...currentPlan, details }],
+  };
 }
 
 function stripEditorProgram(program: EditorProgram): PolicyProgramInput {
@@ -939,6 +1035,12 @@ function programStatus(
   program: EditorProgram,
   issues: ReturnType<typeof policyReadinessIssues>
 ) {
+  if (program.benefitType === "VoluntaryOfferings") {
+    const count = selectedVoluntaryPlanOfferings(program.plans[0]?.details).length;
+    return count > 0
+      ? { label: "Included", className: "bg-green-50 text-success" }
+      : { label: "None selected", className: "bg-border-lighter text-text-600" };
+  }
   if (!program.offered) {
     return { label: "Not offered", className: "bg-border-lighter text-text-600" };
   }

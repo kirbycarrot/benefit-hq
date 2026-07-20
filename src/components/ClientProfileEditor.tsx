@@ -146,7 +146,11 @@ export function ClientProfileEditor({
                 >
                   <span className="flex items-center justify-between gap-3 text-xs font-semibold">
                     {section.label}
-                    <span className={active ? "text-white/70" : "text-text-400"}>{status.percentage}%</span>
+                    <span className={active ? "text-white/70" : "text-text-400"}>
+                      {section.key === "documents"
+                        ? `${progress.documentCount} ${progress.documentCount === 1 ? "document" : "documents"}`
+                        : `${status.percentage}%`}
+                    </span>
                   </span>
                 </button>
               );

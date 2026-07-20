@@ -24,7 +24,6 @@ export default async function ClientDetailPage({
         profile: true,
         planYears: { orderBy: { effectiveDate: "desc" } },
         locations: { where: { isHeadquarters: true }, take: 1 },
-        priorities: { orderBy: { rank: "asc" }, take: 3 },
         _count: {
           select: {
             teamAssignments: true,
@@ -151,22 +150,13 @@ export default async function ClientDetailPage({
                 {Object.entries(progress.sections).map(([key, section]) => (
                   <div key={key} className="rounded-[10px] bg-panel-tint px-3 py-3">
                     <p className="text-xs font-semibold capitalize text-text-900">{sectionLabel(key)}</p>
-                    <p className="mt-1 text-[11px] text-text-400">{section.completed} of {section.total} complete</p>
+                    <p className="mt-1 text-[11px] text-text-400">
+                      {key === "documents"
+                        ? `${progress.documentCount} ${progress.documentCount === 1 ? "document" : "documents"}`
+                        : `${section.completed} of ${section.total} complete`}
+                    </p>
                   </div>
                 ))}
-              </div>
-              <div className="mt-5 flex flex-col gap-4 border-t border-border-lighter pt-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  {client.priorities.length > 0 ? (
-                    <>
-                      <p className="text-xs font-bold text-text-900">Top priorities</p>
-                      <p className="mt-1 text-xs text-text-600">{client.priorities.map((priority) => priority.objective).join(" · ")}</p>
-                    </>
-                  ) : (
-                    <p className="text-xs text-text-600">Add strategic priorities and contacts as discovery continues.</p>
-                  )}
-                </div>
-                <Link href={`/clients/${client.id}/edit`} className="shrink-0 text-xs font-semibold text-link hover:text-link-hover">Continue onboarding &rarr;</Link>
               </div>
             </div>
           </section>

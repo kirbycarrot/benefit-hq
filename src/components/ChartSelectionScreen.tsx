@@ -192,8 +192,9 @@ export function ChartSelectionScreen({
               const result = chartResults[def.key];
               const viewOptions = chartViewOptions(def.key);
               const selectedView = chartView(def.key, selection);
-              const renewalUnavailable =
-                result?.kind === "renewal" && !result.available;
+              const unavailable =
+                (result?.kind === "renewal" || result?.kind === "benchmark") &&
+                !result.available;
               return (
                 <div
                   key={def.key}
@@ -206,9 +207,9 @@ export function ChartSelectionScreen({
                       <label className="flex items-center gap-2.5">
                         <input
                           type="checkbox"
-                          checked={renewalUnavailable ? false : enabled}
+                          checked={unavailable ? false : enabled}
                           onChange={() => toggle(def.key)}
-                          disabled={renewalUnavailable}
+                          disabled={unavailable || saving}
                           className="h-4 w-4 rounded border-input-border accent-ink-900"
                         />
                         <span className="text-sm font-semibold text-text-900">{def.label}</span>
@@ -222,7 +223,7 @@ export function ChartSelectionScreen({
                           aria-label={`View for ${def.label}`}
                           value={selectedView}
                           onChange={(event) => void changeView(def.key, event.target.value)}
-                          disabled={!enabled || renewalUnavailable || saving}
+                          disabled={!enabled || unavailable || saving}
                           className="h-9 rounded-[9px] border border-input-border bg-white px-3 text-xs text-text-900 focus:border-teal-deep focus:outline-none disabled:opacity-50"
                         >
                           {viewOptions.map((option) => (
@@ -237,11 +238,13 @@ export function ChartSelectionScreen({
 
                   {enabled && result && (
                     <div className="mt-4">
-                      {renewalUnavailable ? (
+                      {unavailable ? (
                         <div className="rounded-[10px] border border-dashed border-border-light bg-panel-tint px-4 py-5 text-center">
-                          <p className="text-sm font-semibold text-text-600">{result.message}</p>
+                          <p className="text-sm font-semibold text-text-600">
+                            {result.message}
+                          </p>
                           <p className="mt-1 text-xs text-text-400">
-                            The generated PowerPoint will omit this slide until a comparison year exists.
+                            The generated PowerPoint will omit this analysis until the required data is available.
                           </p>
                         </div>
                       ) : (
@@ -260,6 +263,11 @@ export function ChartSelectionScreen({
 }
 
 function ChartPreview({ result, view }: { result: ChartResult; view?: string }) {
+  if (result.kind === "benchmark") {
+    if (!result.available) return null;
+    return <BenchmarkPreview result={result} />;
+  }
+
   if (result.kind === "executive") {
     return (
       <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-panel-tint">
@@ -372,30 +380,45 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
     const matchPercentage = result.totalElections
       ? (result.matchedElections / result.totalElections) * 100
       : 0;
+    const marketContext = result.medicalCostPerEmployeeBenchmark;
+    const summaryMetrics = [
+      { label: "Estimated annual premium", value: formatCompactCurrency(result.annualTotalSpend) },
+      { label: "Employer-funded annual", value: formatCompactCurrency(result.annualEmployerSpend) },
+      { label: "Employee-funded annual", value: formatCompactCurrency(result.annualEmployeeSpend) },
+      {
+        label: "Elections matched",
+        value: `${matchPercentage.toFixed(1)}%`,
+        detail: `${result.matchedElections} of ${result.totalElections}`,
+      },
+      ...(marketContext
+        ? [{
+            label: "Medical cost per employee",
+            value: formatCompactCurrency(marketContext.clientValue),
+            detail: [
+              marketContext.national.value === null
+                ? null
+                : `${marketContext.nationalLabel} ${formatCompactCurrency(marketContext.national.value)}`,
+              marketContext.peer.value === null
+                ? null
+                : `${marketContext.peerLabel} ${formatCompactCurrency(marketContext.peer.value)}`,
+            ].filter(Boolean).join(" · "),
+          }]
+        : []),
+    ];
 
     return (
       <div className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
-        <div className="grid grid-cols-2 gap-px bg-border-lighter lg:grid-cols-4">
-          {[
-            { label: "Estimated annual premium", value: result.annualTotalSpend },
-            { label: "Employer-funded annual", value: result.annualEmployerSpend },
-            { label: "Employee-funded annual", value: result.annualEmployeeSpend },
-          ].map((metric) => (
+        <div className={`grid grid-cols-2 gap-px bg-border-lighter ${marketContext ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+          {summaryMetrics.map((metric) => (
             <div key={metric.label} className="bg-panel-tint px-3 py-3.5 sm:px-4">
               <p className="text-lg font-extrabold text-text-900 sm:text-xl">
-                {formatCompactCurrency(metric.value)}
+                {metric.value}
               </p>
-              <p className="mt-1 text-[10px] leading-4 text-text-400">{metric.label}</p>
+              <p className="mt-1 text-[10px] leading-4 text-text-400">
+                {metric.label}{metric.detail ? ` · ${metric.detail}` : ""}
+              </p>
             </div>
           ))}
-          <div className="bg-panel-tint px-3 py-3.5 sm:px-4">
-            <p className="text-lg font-extrabold text-text-900 sm:text-xl">
-              {matchPercentage.toFixed(1)}%
-            </p>
-            <p className="mt-1 text-[10px] leading-4 text-text-400">
-              Elections matched · {result.matchedElections} of {result.totalElections}
-            </p>
-          </div>
         </div>
 
         {result.rows.length > 0 ? (
@@ -464,6 +487,7 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
         )}
         <p className="border-t border-border-lighter bg-panel-tint px-4 py-3 text-[10px] leading-4 text-text-400">
           {result.note}
+          {marketContext ? ` Mercer source: ${marketContext.datasetTitle}, ${marketContext.surveyYear} (version ${marketContext.version}).` : ""}
         </p>
       </div>
     );
@@ -951,6 +975,156 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
       </ResponsiveContainer>
     </div>
   );
+}
+
+function BenchmarkPreview({
+  result,
+}: {
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>;
+}) {
+  if (result.mode === "prevalence") {
+    return (
+      <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-3 sm:p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {result.rows.map((row) => (
+            <div key={row.subtype} className="rounded-[10px] bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-bold text-text-900">{row.subtype}</p>
+                <span className={`rounded-full px-2 py-1 text-[9px] font-bold ${row.offered ? "bg-teal-bright/20 text-teal-deep" : "bg-panel-tint text-text-400"}`}>
+                  {row.offered ? "Client offers" : "Not offered"}
+                </span>
+              </div>
+              <BenchmarkPreviewBar label="National" point={row.national} />
+              <BenchmarkPreviewBar label={result.peerLabel} point={row.peer} accent />
+            </div>
+          ))}
+        </div>
+        <BenchmarkPreviewNote result={result} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {result.mode === "cost" && result.medicalCostPerEmployee.available && (
+        <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-4">
+          <p className="text-[10px] font-bold tracking-[0.06em] text-text-400 uppercase">
+            Annual medical cost per employee
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { label: "Client", value: result.medicalCostPerEmployee.clientValue },
+              { label: result.nationalLabel, value: result.medicalCostPerEmployee.national.value },
+              { label: result.peerLabel, value: result.medicalCostPerEmployee.peer.value },
+            ].map((item) => (
+              <div key={item.label} className="rounded-[9px] bg-white px-3 py-3">
+                <p className="truncate text-[9px] font-semibold text-text-400" title={item.label}>{item.label}</p>
+                <p className="mt-1 text-lg font-extrabold text-text-900">{formatBenchmarkValue(item.value, "currency_pepy")}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {result.plans.map((plan) => {
+        const groups = result.mode === "cost"
+          ? [
+              { label: "Monthly premium", rows: plan.premiumRows },
+              { label: "Employee contribution", rows: plan.contributionRows },
+            ]
+          : [{ label: "Plan provisions", rows: plan.designRows }];
+        return (
+          <div key={plan.id} className="overflow-hidden rounded-[12px] border border-border-lighter bg-white">
+            <div className="flex items-center justify-between gap-3 bg-panel-tint px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-text-900">{plan.name}</p>
+                <p className="text-[10px] text-text-400">{plan.subtype} · recorded company values with market context</p>
+              </div>
+              <p className="text-[10px] font-semibold text-text-400">National · {result.peerLabel}</p>
+            </div>
+            <div className={`grid gap-px bg-border-lighter ${groups.length === 2 ? "lg:grid-cols-2" : ""}`}>
+              {groups.map((group) => (
+                <div key={group.label} className="min-w-0 bg-white p-4">
+                  <p className="mb-2 text-[10px] font-bold tracking-[0.06em] text-text-400 uppercase">{group.label}</p>
+                  <div className="space-y-1.5">
+                    {group.rows.slice(0, result.mode === "design" ? 8 : 4).map((row) => (
+                      <div key={row.metricCode} className="grid grid-cols-[minmax(0,1fr)_70px_70px_70px] items-center gap-2 text-[10px]">
+                        <span className="truncate font-semibold text-text-600" title={row.label}>{benchmarkRowLabel(row.label, row.tier)}</span>
+                        <span className="text-right font-bold text-text-900">{formatBenchmarkValue(row.clientValue, row.unit)}</span>
+                        <span className="text-right text-text-400">{formatBenchmarkPoint(row.national, row.unit)}</span>
+                        <span className="text-right font-semibold text-teal-deep">{formatBenchmarkPoint(row.peer, row.unit)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <BenchmarkPreviewNote result={result} />
+    </div>
+  );
+}
+
+function BenchmarkPreviewBar({
+  label,
+  point,
+  accent = false,
+}: {
+  label: string;
+  point: { value: number | null; availability: string };
+  accent?: boolean;
+}) {
+  const value = point.value;
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-2 text-[10px]">
+        <span className="truncate text-text-400" title={label}>{label}</span>
+        <span className="font-bold text-text-600">{formatBenchmarkPoint(point, "percentage")}</span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-border-lighter">
+        {value !== null && <div className={`h-full rounded-full ${accent ? "bg-teal-deep" : "bg-text-300"}`} style={{ width: `${Math.min(100, value * 100)}%` }} />}
+      </div>
+    </div>
+  );
+}
+
+function BenchmarkPreviewNote({
+  result,
+}: {
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>;
+}) {
+  return (
+    <p className="mt-3 text-[10px] leading-4 text-text-400">
+      Source: {result.datasetTitle}, {result.surveyYear} · Version {result.version}. {result.note}
+    </p>
+  );
+}
+
+function benchmarkRowLabel(label: string, tier: string | null): string {
+  if (tier) return tierLabelForBenchmark(tier);
+  return label.replace(/^(PPO|HDHP|HMO) /, "");
+}
+
+function tierLabelForBenchmark(tier: string): string {
+  return ({ EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", EF: "Family" } as Record<string, string>)[tier] ?? tier;
+}
+
+function formatBenchmarkPoint(
+  point: { value: number | null; availability: string },
+  unit: string
+): string {
+  if (point.value !== null) return formatBenchmarkValue(point.value, unit);
+  if (point.availability === "insufficient_data") return "ID";
+  if (point.availability === "not_applicable") return "N/A";
+  return "—";
+}
+
+function formatBenchmarkValue(value: number | null, unit: string): string {
+  if (value === null) return "—";
+  if (unit === "percentage") return `${Math.round(value * 100)}%`;
+  if (unit.startsWith("currency")) return formatCompactCurrency(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 }
 
 function AlternateBarPreview({

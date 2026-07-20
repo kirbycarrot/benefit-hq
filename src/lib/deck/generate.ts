@@ -19,7 +19,17 @@ import {
   type DeckRecommendation,
 } from "@/lib/deck/narrative";
 import { formatDate } from "@/lib/date";
+import {
+  formatCurrency,
+  formatDisplayValue,
+  formatWholeNumber,
+} from "@/lib/number-format";
 import type { ChartResult } from "@/lib/charts/types";
+import { loadBenchmarkDashboard } from "@/lib/benchmarks/server";
+import {
+  buildMercerChartResults,
+  clientMedicalCostContext,
+} from "@/lib/benchmarks/charts";
 import {
   chartView,
   COVERAGE_TIER_KEYS,
@@ -35,6 +45,7 @@ import {
   tierCombinedBarResult,
   tierTableResult,
 } from "@/lib/charts/viewTransforms";
+import { selectedVoluntaryPlanOfferings } from "@/lib/policy-details";
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
@@ -96,7 +107,7 @@ function rateCurrency(value: number, ratePeriod: string): string {
         : ratePeriod === "annual"
           ? "yr"
           : ratePeriod;
-  return `$${value.toFixed(2)} / ${suffix}`;
+  return `${formatCurrency(value)} / ${suffix}`;
 }
 
 function signedCompactCurrency(value: number): string {
@@ -655,7 +666,7 @@ export function addBenefitsParticipationSlide(
     const metricW = 2.25;
     metrics.forEach((metric, metricIndex) => {
       const x = metricStartX + metricIndex * metricW;
-      slide.addText(String(metric.value), {
+      slide.addText(formatWholeNumber(metric.value), {
         x,
         y: y + 0.2,
         w: metricW - 0.25,
@@ -762,7 +773,7 @@ export function addContributionStrategySlides(
       return [
         { text: benefitPlan, options: { ...baseOptions, bold: true } },
         { text: row.tier, options: baseOptions },
-        { text: String(row.enrolled), options: { ...baseOptions, bold: true, align: "center" } },
+        { text: formatWholeNumber(row.enrolled), options: { ...baseOptions, bold: true, align: "center" } },
         { text: rateCurrency(row.employeeRate, row.ratePeriod), options: baseOptions },
         { text: rateCurrency(row.employerRate, row.ratePeriod), options: baseOptions },
         {
@@ -805,12 +816,28 @@ export function addContributionStrategySlides(
         {
           label: "ELECTIONS MATCHED",
           value: `${matchPercentage.toFixed(1)}%`,
-          detail: `${result.matchedElections} of ${result.totalElections}`,
+          detail: `${formatWholeNumber(result.matchedElections)} of ${formatWholeNumber(result.totalElections)}`,
         },
+        ...(result.medicalCostPerEmployeeBenchmark
+          ? [{
+              label: "MEDICAL COST / EMPLOYEE",
+              value: compactCurrency(result.medicalCostPerEmployeeBenchmark.clientValue),
+              detail: [
+                result.medicalCostPerEmployeeBenchmark.national.value === null
+                  ? null
+                  : `National ${compactCurrency(result.medicalCostPerEmployeeBenchmark.national.value)}`,
+                result.medicalCostPerEmployeeBenchmark.peer.value === null
+                  ? null
+                  : `Peer ${compactCurrency(result.medicalCostPerEmployeeBenchmark.peer.value)}`,
+              ].filter(Boolean).join(" · "),
+            }]
+          : []),
       ];
       const summaryGap = 0.15;
       const summaryX = 0.5;
-      const summaryW = (SLIDE_W - 1 - summaryGap * 3) / 4;
+      const summaryW =
+        (SLIDE_W - 1 - summaryGap * (summaryMetrics.length - 1)) /
+        summaryMetrics.length;
       summaryMetrics.forEach((metric, index) => {
         const x = summaryX + index * (summaryW + summaryGap);
         slide.addShape("roundRect", {
@@ -832,10 +859,10 @@ export function addContributionStrategySlides(
         });
         slide.addText(metric.value, {
           x: x + 0.22,
-          y: 1.31,
+          y: 1.27,
           w: summaryW - 0.36,
-          h: 0.34,
-          fontSize: 20,
+          h: 0.31,
+          fontSize: summaryMetrics.length > 4 ? 17 : 20,
           bold: true,
           color: primaryColor,
           margin: 0,
@@ -843,10 +870,10 @@ export function addContributionStrategySlides(
         });
         slide.addText(metric.label, {
           x: x + 0.22,
-          y: 1.7,
+          y: 1.64,
           w: summaryW - 0.36,
           h: 0.15,
-          fontSize: 7.5,
+          fontSize: 7,
           bold: true,
           color: "6B7280",
           charSpacing: 0.7,
@@ -854,14 +881,14 @@ export function addContributionStrategySlides(
         });
         if (metric.detail) {
           slide.addText(metric.detail, {
-            x: x + summaryW - 0.9,
-            y: 1.7,
-            w: 0.68,
+            x: x + 0.22,
+            y: 1.83,
+            w: summaryW - 0.36,
             h: 0.15,
-            fontSize: 7.5,
+            fontSize: 7,
             color: "6B7280",
-            align: "right",
             margin: 0,
+            fit: "shrink",
           });
         }
       });
@@ -893,7 +920,10 @@ export function addContributionStrategySlides(
 
     if (page.first) {
       addTakeawayPanel(slide, takeawayForResult(result), primary, secondary, 6.14, 0.62);
-      slide.addText(result.note, {
+      const marketSource = result.medicalCostPerEmployeeBenchmark
+        ? ` Mercer source: ${result.medicalCostPerEmployeeBenchmark.datasetTitle}, ${result.medicalCostPerEmployeeBenchmark.surveyYear} (version ${result.medicalCostPerEmployeeBenchmark.version}).`
+        : "";
+      slide.addText(`${result.note}${marketSource}`, {
         x: 0.55,
         y: 6.88,
         w: SLIDE_W - 1.1,
@@ -944,7 +974,7 @@ export function addWorkforceRiskSlide(
       fill: { color: index === 2 ? secondaryColor : primaryColor },
       line: { color: index === 2 ? secondaryColor : primaryColor, transparency: 100 },
     });
-    slide.addText(String(indicator.value), {
+    slide.addText(formatWholeNumber(indicator.value), {
       x: x + 0.24,
       y: cardY + 0.16,
       w: 0.7,
@@ -975,7 +1005,7 @@ export function addWorkforceRiskSlide(
       margin: 0,
       fit: "shrink",
     });
-    slide.addText(`${indicator.definition} · ${indicator.denominator} records`, {
+    slide.addText(`${indicator.definition} · ${formatWholeNumber(indicator.denominator)} records`, {
       x: x + 0.24,
       y: cardY + 0.94,
       w: cardW - 0.45,
@@ -1010,7 +1040,7 @@ export function addWorkforceRiskSlide(
     color: "273036",
     margin: 0,
   });
-  slide.addText(`${result.completeRecords} of ${result.totalEmployees} employees have both dates`, {
+  slide.addText(`${formatWholeNumber(result.completeRecords)} of ${formatWholeNumber(result.totalEmployees)} employees have both dates`, {
     x: heatX + 0.24,
     y: heatY + 0.47,
     w: 3.2,
@@ -1094,7 +1124,7 @@ export function addWorkforceRiskSlide(
         line: { color: fill, transparency: 100 },
         rectRadius: 0.03,
       });
-      slide.addText(String(count), {
+      slide.addText(formatWholeNumber(count), {
         x: gridX + columnIndex * (cellW + cellGap),
         y: y + 0.07,
         w: cellW,
@@ -1185,7 +1215,7 @@ export function addWorkforceRiskSlide(
   });
 
   slide.addText(
-    `Data coverage: birth dates ${result.birthDateRecords}/${result.totalEmployees} · hire dates ${result.hireDateRecords}/${result.totalEmployees} · both ${result.completeRecords}/${result.totalEmployees}`,
+    `Data coverage: birth dates ${formatWholeNumber(result.birthDateRecords)}/${formatWholeNumber(result.totalEmployees)} · hire dates ${formatWholeNumber(result.hireDateRecords)}/${formatWholeNumber(result.totalEmployees)} · both ${formatWholeNumber(result.completeRecords)}/${formatWholeNumber(result.totalEmployees)}`,
     {
       x: margin,
       y: 6.84,
@@ -1230,12 +1260,12 @@ export function addDataQualitySlide(
     {
       label: "Valid ZIP coverage",
       value: `${validZipPercentage.toFixed(1)}%`,
-      detail: `${result.validZipRecords} of ${result.totalEmployees} employees mapped`,
+      detail: `${formatWholeNumber(result.validZipRecords)} of ${formatWholeNumber(result.totalEmployees)} employees mapped`,
       color: primaryColor,
     },
     {
       label: "Unmatched elections",
-      value: String(result.unmatchedElections),
+      value: formatWholeNumber(result.unmatchedElections),
       detail:
         matchPercentage === null
           ? "No active elections to match"
@@ -1245,7 +1275,7 @@ export function addDataQualitySlide(
     {
       label: "Fully complete records",
       value: `${completeRecordPercentage.toFixed(1)}%`,
-      detail: `${result.completeRecords} of ${result.totalEmployees} employees`,
+      detail: `${formatWholeNumber(result.completeRecords)} of ${formatWholeNumber(result.totalEmployees)} employees`,
       color: primaryColor,
     },
   ];
@@ -1386,7 +1416,7 @@ export function addDataQualitySlide(
       color: "273036",
       margin: 0,
     });
-    slide.addText(`${field.complete} / ${field.missing}`, {
+    slide.addText(`${formatWholeNumber(field.complete)} / ${formatWholeNumber(field.missing)}`, {
       x: auditX + 2.1,
       y,
       w: 1.45,
@@ -1572,7 +1602,7 @@ export function addRenewalComparisonSlides(
         { text: plan, options: { ...baseOptions, bold: true } },
         { text: row.tier, options: baseOptions },
         {
-          text: row.status === "removed" ? "—" : String(row.enrolled),
+          text: row.status === "removed" ? "—" : formatWholeNumber(row.enrolled),
           options: { ...baseOptions, bold: true, align: "center" },
         },
         {
@@ -1654,7 +1684,7 @@ export function addRenewalComparisonSlides(
         },
         {
           label: "Comparable rate rows",
-          value: String(result.comparableRows),
+          value: formatWholeNumber(result.comparableRows),
           change: `${result.renamedRows} renamed`,
           detail: `${result.newRows} new · ${result.removedRows} removed`,
         },
@@ -1809,6 +1839,56 @@ function addStatsSlide(
   });
 }
 
+function addAdditionalBenefitsSlide(
+  pres: PptxGenJS,
+  offerings: string[],
+  primary: string,
+  secondary: string
+) {
+  const slide = addContentSlide(pres);
+  const countLabel = `${offerings.length} additional ${offerings.length === 1 ? "benefit is" : "benefits are"} available to employees`;
+  addHeader(slide, countLabel, primary, secondary, "Additional benefits offered");
+  slide.addText(
+    "The benefits program also includes the following voluntary and supplemental offerings.",
+    {
+      x: 0.62,
+      y: 1.18,
+      w: SLIDE_W - 1.24,
+      h: 0.38,
+      fontSize: 16,
+      color: "4B5563",
+      margin: 0,
+      fit: "shrink",
+    }
+  );
+
+  const firstColumn = offerings.slice(0, Math.ceil(offerings.length / 2));
+  const secondColumn = offerings.slice(firstColumn.length);
+  [firstColumn, secondColumn].forEach((items, columnIndex) => {
+    if (items.length === 0) return;
+    slide.addText(items.map((item) => `•  ${item}`).join("\n"), {
+      x: columnIndex === 0 ? 0.9 : 6.9,
+      y: 1.9,
+      w: 5.4,
+      h: 3.75,
+      fontSize: 18,
+      color: stripHash(primary),
+      breakLine: false,
+      margin: 0,
+      valign: "middle",
+      fit: "shrink",
+      paraSpaceAfter: 13,
+    });
+  });
+
+  addTakeawayPanel(
+    slide,
+    "These offerings broaden the employee benefits program beyond its core plan structure.",
+    primary,
+    secondary
+  );
+}
+
 function addBarSlide(
   pres: PptxGenJS,
   result: Extract<ChartResult, { kind: "bar" }>,
@@ -1908,7 +1988,7 @@ function addTableSlide(
 
   const bodyRows: PptxGenJS.TableRow[] = result.rows.slice(0, 11).map((row, i) =>
     row.map((cell) => ({
-      text: String(cell),
+      text: formatDisplayValue(cell),
       options: {
         fill: { color: i % 2 === 0 ? "FFFFFF" : "F9FAFB" },
         fontSize: 11,
@@ -2058,10 +2138,383 @@ function addPanelSlide(
   );
 }
 
+function addMercerBenchmarkSlides(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>,
+  primary: string,
+  secondary: string
+) {
+  if (result.mode === "cost") {
+    result.plans.forEach((plan) => addMercerCostSlide(pres, result, plan, primary, secondary));
+    return;
+  }
+  if (result.mode === "design") {
+    result.plans.forEach((plan) => addMercerDesignSlides(pres, result, plan, primary, secondary));
+    return;
+  }
+  addMercerPrevalenceSlide(pres, result, primary, secondary);
+}
+
+function addMercerCostSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true; mode: "cost" }>,
+  plan: Extract<ChartResult, { kind: "benchmark"; available: true; mode: "cost" }>["plans"][number],
+  primary: string,
+  secondary: string
+) {
+  const slide = addContentSlide(pres);
+  const rows: Array<{
+    section: string;
+    tier: string | null;
+    unit: string;
+    clientValue: number | null;
+    national: { value: number | null; availability: string };
+    peer: { value: number | null; availability: string };
+    peerVariance: number | null;
+  }> = [
+    ...plan.premiumRows.map((row) => ({ ...row, section: "Premium" })),
+    ...plan.contributionRows.map((row) => ({ ...row, section: "Employee contribution" })),
+  ];
+  if (result.medicalCostPerEmployee.available) {
+    const pepy = result.medicalCostPerEmployee;
+    rows.unshift({
+      section: "Annual medical cost per employee",
+      tier: null,
+      unit: "currency_pepy",
+      clientValue: pepy.clientValue,
+      national: pepy.national,
+      peer: pepy.peer,
+      peerVariance: pepy.peer.value === null ? null : pepy.clientValue - pepy.peer.value,
+    });
+  }
+  addHeader(
+    slide,
+    benchmarkCostTitle(plan.name, rows, result.peerLabel),
+    primary,
+    secondary,
+    "Medical cost comparison"
+  );
+  addBenchmarkContextLine(slide, result, plan.subtype, primary, secondary);
+
+  const header: PptxGenJS.TableRow = [
+    "Measure",
+    "Client",
+    result.nationalLabel,
+    benchmarkPeerColumnLabel(result),
+    "Difference vs. peer",
+  ].map((text) => ({
+    text,
+    options: {
+      fill: { color: stripHash(primary) },
+      color: "FFFFFF",
+      bold: true,
+      fontSize: 9,
+      margin: 0.07,
+      fit: "shrink",
+    },
+  }));
+  const body: PptxGenJS.TableRow[] = rows.map((row, index) => {
+    const fill = index % 2 === 0 ? "FFFFFF" : "F7F8F7";
+    const options = { fill: { color: fill }, color: "273036", fontSize: 9, margin: 0.07 };
+    return [
+      { text: row.tier ? `${row.section} · ${benchmarkTierLabel(row.tier)}` : row.section, options: { ...options, bold: true } },
+      { text: benchmarkValue(row.clientValue, row.unit), options: { ...options, bold: true, align: "right" } },
+      { text: benchmarkPointValue(row.national, row.unit), options: { ...options, align: "right" } },
+      { text: benchmarkPointValue(row.peer, row.unit), options: { ...options, align: "right", color: stripHash(secondary), bold: true } },
+      { text: benchmarkVariance(row.peerVariance, row.unit), options: { ...options, align: "right" } },
+    ];
+  });
+  slide.addTable([header, ...body], {
+    x: 0.55,
+    y: 1.6,
+    w: SLIDE_W - 1.1,
+    colW: [3.45, 1.65, 2.2, 2.2, 2.73],
+    rowH: rows.length > 8 ? 0.43 : 0.48,
+    border: { type: "solid", color: "E2E7E4", pt: 0.45 },
+    autoPage: false,
+    margin: 0.07,
+  });
+  addTakeawayPanel(
+    slide,
+    benchmarkCostTakeaway(plan.name, rows, result.peerLabel),
+    primary,
+    secondary,
+    6.05,
+    0.68
+  );
+  addMercerSourceLine(slide, result);
+}
+
+function addMercerDesignSlides(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true; mode: "design" }>,
+  plan: Extract<ChartResult, { kind: "benchmark"; available: true; mode: "design" }>["plans"][number],
+  primary: string,
+  secondary: string
+) {
+  const rows = plan.designRows;
+  const chunks = Array.from(
+    { length: Math.ceil(rows.length / 8) },
+    (_, index) => rows.slice(index * 8, index * 8 + 8)
+  );
+
+  chunks.forEach((chunk, pageIndex) => {
+    const slide = addContentSlide(pres);
+    addHeader(
+      slide,
+      pageIndex === 0
+        ? benchmarkDesignTitle(plan.name, rows, result.peerLabel)
+        : `${plan.name} plan design comparison — continued`,
+      primary,
+      secondary,
+      "Medical plan design comparison"
+    );
+    addBenchmarkContextLine(slide, result, plan.subtype, primary, secondary);
+
+    const header: PptxGenJS.TableRow = [
+      "Plan provision",
+      "Mercer statistic",
+      "Client",
+      result.nationalLabel,
+      benchmarkPeerColumnLabel(result),
+      "Difference vs. peer",
+    ].map((text) => ({
+      text,
+      options: {
+        fill: { color: stripHash(primary) },
+        color: "FFFFFF",
+        bold: true,
+        fontSize: 8.5,
+        margin: 0.06,
+        fit: "shrink",
+      },
+    }));
+    const body: PptxGenJS.TableRow[] = chunk.map((row, index) => {
+      const fill = index % 2 === 0 ? "FFFFFF" : "F7F8F7";
+      const options = { fill: { color: fill }, color: "273036", fontSize: 8.7, margin: 0.06 };
+      return [
+        { text: benchmarkMetricLabel(row.label), options: { ...options, bold: true } },
+        { text: `Mercer ${row.statistic}`, options },
+        { text: benchmarkValue(row.clientValue, row.unit), options: { ...options, bold: true, align: "right" } },
+        { text: benchmarkPointValue(row.national, row.unit), options: { ...options, align: "right" } },
+        { text: benchmarkPointValue(row.peer, row.unit), options: { ...options, align: "right", color: stripHash(secondary), bold: true } },
+        { text: benchmarkVariance(row.peerVariance, row.unit), options: { ...options, align: "right" } },
+      ];
+    });
+    slide.addTable([header, ...body], {
+      x: 0.55,
+      y: 1.6,
+      w: SLIDE_W - 1.1,
+      colW: [3.15, 1.65, 1.35, 2.05, 2.05, 1.98],
+      rowH: 0.48,
+      border: { type: "solid", color: "E2E7E4", pt: 0.45 },
+      autoPage: false,
+      margin: 0.06,
+    });
+    addTakeawayPanel(
+      slide,
+      `${chunk.length} recorded ${plan.name} plan provision${chunk.length === 1 ? " is" : "s are"} shown with national and ${result.peerLabel} context.`,
+      primary,
+      secondary,
+      6.05,
+      0.68
+    );
+    addMercerSourceLine(slide, result);
+  });
+}
+
+function benchmarkDesignTitle(
+  planName: string,
+  rows: Array<{ label: string; peerVariance: number | null; unit: string }>,
+  peerLabel: string
+): string {
+  const row = rows.find((item) => item.peerVariance !== null);
+  if (!row || row.peerVariance === null) return `${planName} plan design in market context`;
+  const direction = row.peerVariance > 0 ? "above" : row.peerVariance < 0 ? "below" : "aligned with";
+  const label = benchmarkMetricLabel(row.label).toLowerCase();
+  if (row.peerVariance === 0) return `${planName} ${label} is aligned with ${peerLabel}`;
+  return `${planName} ${label} is ${benchmarkValue(Math.abs(row.peerVariance), row.unit)} ${direction} ${peerLabel}`;
+}
+
+function addMercerPrevalenceSlide(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true; mode: "prevalence" }>,
+  primary: string,
+  secondary: string
+) {
+  const slide = addContentSlide(pres);
+  const offered = result.rows.filter((row) => row.offered).map((row) => row.subtype);
+  const title = offered.length > 0
+    ? `${offered.join(", ")} ${offered.length === 1 ? "is" : "are"} represented in the client medical lineup`
+    : "The client medical lineup is not yet recorded for market comparison";
+  addHeader(slide, title, primary, secondary, "Medical plan prevalence");
+  addBenchmarkContextLine(slide, result, "Market practice", primary, secondary);
+
+  const primaryColor = stripHash(primary);
+  const secondaryColor = stripHash(secondary);
+  result.rows.slice(0, 4).forEach((row, index) => {
+    const y = 1.45 + index * 1.05;
+    slide.addText(row.subtype, {
+      x: 0.62, y, w: 1.15, h: 0.28, fontSize: 15, bold: true, color: primaryColor, margin: 0,
+    });
+    slide.addText(row.offered ? "CLIENT OFFERS" : "NOT OFFERED", {
+      x: 0.62, y: y + 0.34, w: 1.35, h: 0.15, fontSize: 7.2, bold: true,
+      color: row.offered ? secondaryColor : "6B7280", charSpacing: 0.5, margin: 0,
+    });
+    addPrevalenceBar(slide, result.nationalLabel, row.national, 2.1, y + 0.02, 9.85, primaryColor);
+    addPrevalenceBar(slide, benchmarkPeerColumnLabel(result), row.peer, 2.1, y + 0.48, 9.85, secondaryColor);
+    if (index < Math.min(result.rows.length, 4) - 1) {
+      slide.addShape("line", { x: 0.62, y: y + 0.9, w: 11.9, h: 0, line: { color: "E4E8E6", pt: 0.5 } });
+    }
+  });
+  addTakeawayPanel(
+    slide,
+    "Prevalence shows how often employers offer each plan type; it provides market context and is not a score of plan quality.",
+    primary,
+    secondary,
+    6.05,
+    0.68
+  );
+  addMercerSourceLine(slide, result);
+}
+
+function addPrevalenceBar(
+  slide: PptxGenJS.Slide,
+  label: string,
+  point: { value: number | null; availability: string },
+  x: number,
+  y: number,
+  w: number,
+  color: string
+) {
+  const labelW = 2.25;
+  const valueW = 0.72;
+  const barW = w - labelW - valueW - 0.25;
+  slide.addText(label, { x, y, w: labelW, h: 0.18, fontSize: 8.5, color: "4B5563", margin: 0, fit: "shrink" });
+  slide.addShape("roundRect", {
+    x: x + labelW, y: y + 0.02, w: barW, h: 0.13,
+    fill: { color: "E9ECEA" }, line: { color: "E9ECEA", transparency: 100 }, rectRadius: 0.03,
+  });
+  if (point.value !== null) {
+    slide.addShape("roundRect", {
+      x: x + labelW, y: y + 0.02, w: Math.max(0.04, barW * Math.min(1, point.value)), h: 0.13,
+      fill: { color }, line: { color, transparency: 100 }, rectRadius: 0.03,
+    });
+  }
+  slide.addText(benchmarkPointValue(point, "percentage"), {
+    x: x + labelW + barW + 0.12, y: y - 0.01, w: valueW, h: 0.2,
+    fontSize: 9, bold: true, color: "273036", align: "right", margin: 0,
+  });
+}
+
+function addBenchmarkContextLine(
+  slide: PptxGenJS.Slide,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>,
+  planType: string,
+  primary: string,
+  secondary: string
+) {
+  slide.addText(`${planType}  ·  National baseline: ${result.nationalLabel}  ·  Primary peer: ${result.peerLabel}`, {
+    x: 0.56, y: 1.08, w: SLIDE_W - 1.12, h: 0.2, fontSize: 9.5,
+    color: "5F6B65", margin: 0, fit: "shrink",
+  });
+  slide.addShape("line", {
+    x: 0.56, y: 1.36, w: 1.35, h: 0,
+    line: { color: stripHash(secondary), pt: 2.2 },
+  });
+}
+
+function addMercerSourceLine(
+  slide: PptxGenJS.Slide,
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>
+) {
+  slide.addText(`Source: ${result.datasetTitle}, ${result.surveyYear} · Version ${result.version}. ${result.note}`, {
+    x: 0.58, y: 6.87, w: SLIDE_W - 1.16, h: 0.18, fontSize: 6.5,
+    color: "6B7280", margin: 0, fit: "shrink", align: "center",
+  });
+}
+
+function benchmarkCostTitle(
+  planName: string,
+  rows: Array<{ tier: string | null; peerVariance: number | null; unit: string }>,
+  peerLabel: string
+): string {
+  const row = rows.find((item) => item.tier === "EE" && item.peerVariance !== null) ??
+    rows.find((item) => item.peerVariance !== null);
+  if (!row || row.peerVariance === null) return `${planName} cost comparison is ready for policy-detail completion`;
+  const direction = row.peerVariance > 0 ? "above" : row.peerVariance < 0 ? "below" : "in line with";
+  return row.peerVariance === 0
+    ? `${planName} employee-only cost is in line with ${peerLabel}`
+    : `${planName} employee-only cost is ${benchmarkValue(Math.abs(row.peerVariance), row.unit)} ${direction} ${peerLabel}`;
+}
+
+function benchmarkPeerColumnLabel(
+  result: Extract<ChartResult, { kind: "benchmark"; available: true }>
+): string {
+  return result.peerLabel === result.nationalLabel ? "Primary peer" : result.peerLabel;
+}
+
+function benchmarkCostTakeaway(
+  planName: string,
+  rows: Array<{ section: string; tier: string | null; peerVariance: number | null; unit: string }>,
+  peerLabel: string
+): string {
+  const row = rows.find((item) => item.tier === "EE" && item.peerVariance !== null) ??
+    rows.find((item) => item.peerVariance !== null);
+  if (!row || row.peerVariance === null)
+    return `${planName} company cost metrics are shown only where a national or ${peerLabel} value is available.`;
+  const direction = row.peerVariance > 0 ? "above" : row.peerVariance < 0 ? "below" : "equal to";
+  return `${row.section} for ${benchmarkTierLabel(row.tier)} is ${benchmarkValue(Math.abs(row.peerVariance), row.unit)} ${direction} the selected peer benchmark.`;
+}
+
+function benchmarkMetricLabel(label: string): string {
+  return label.replace(/^(PPO|HDHP|HMO) /, "");
+}
+
+function benchmarkTierLabel(tier: string | null): string {
+  if (!tier) return "Plan";
+  return ({ EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", EF: "Family" } as Record<string, string>)[tier] ?? tier;
+}
+
+function benchmarkPointValue(
+  point: { value: number | null; availability: string },
+  unit: string
+): string {
+  if (point.value !== null) return benchmarkValue(point.value, unit);
+  if (point.availability === "insufficient_data") return "ID";
+  if (point.availability === "not_applicable") return "N/A";
+  return "—";
+}
+
+function benchmarkValue(value: number | null, unit: string): string {
+  if (value === null) return "—";
+  if (unit === "percentage") return `${Math.round(value * 100)}%`;
+  if (unit.startsWith("currency")) return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
+}
+
+function benchmarkVariance(value: number | null, unit: string): string {
+  if (value === null) return "—";
+  if (value === 0) return benchmarkValue(0, unit);
+  return `${value > 0 ? "+" : "−"}${benchmarkValue(Math.abs(value), unit)}`;
+}
+
 export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
   const planYear = await prisma.planYear.findUniqueOrThrow({
     where: { id: planYearId },
-    include: { client: true, deckConfig: true },
+    include: {
+      client: true,
+      deckConfig: true,
+      benefitPrograms: {
+        where: { benefitType: "VoluntaryOfferings", offered: true },
+        include: {
+          plans: {
+            where: { offered: true },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
+    },
   });
 
   const chartDefinitions = await prisma.chartDefinition.findMany({
@@ -2075,8 +2528,33 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
   const isEnabled = (key: string) =>
     selections[key]?.enabled ?? defsByKey.get(key)?.defaultEnabled ?? false;
   const selectedView = (key: string) => chartView(key, selections[key]);
+  const additionalBenefits = selectedVoluntaryPlanOfferings(
+    planYear.benefitPrograms[0]?.plans[0]?.details
+  );
 
-  const dataset = await loadChartDataset(planYearId);
+  const [dataset, benchmarkData] = await Promise.all([
+    loadChartDataset(planYearId),
+    loadBenchmarkDashboard(planYearId, planYear.clientId),
+  ]);
+  const baseContributionResult = CHART_COMPUTE["contribution-strategy"](dataset);
+  if (baseContributionResult.kind !== "contribution") {
+    throw new Error("Contribution strategy returned an unexpected result type");
+  }
+  const mercerResults = buildMercerChartResults(
+    benchmarkData,
+    clientMedicalCostContext(baseContributionResult, dataset.employees.length)
+  );
+  const costBenchmark = mercerResults["mercer-medical-cost-benchmark"];
+  const contributionResult =
+    costBenchmark.kind === "benchmark" &&
+    costBenchmark.available &&
+    costBenchmark.mode === "cost" &&
+    costBenchmark.medicalCostPerEmployee.available
+      ? {
+          ...baseContributionResult,
+          medicalCostPerEmployeeBenchmark: costBenchmark.medicalCostPerEmployee,
+        }
+      : baseContributionResult;
 
   const primary = planYear.client.primaryColor;
   const secondary = planYear.client.secondaryColor;
@@ -2166,6 +2644,7 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
   );
   const consumedKeys = new Set<string>();
   const renderedResults: ChartResult[] = [];
+  let additionalBenefitsHandled = false;
   let currentCategory: string | null = null;
   let sectionNumber = 0;
   const ensureSection = (category: string) => {
@@ -2185,6 +2664,12 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
 
   // Chart/table slides, in catalog order, for every enabled chart with data
   for (const def of chartDefinitions) {
+    if (!additionalBenefitsHandled && def.sortOrder >= 300) {
+      if (additionalBenefits.length > 0) {
+        addAdditionalBenefitsSlide(pres, additionalBenefits, primary, secondary);
+      }
+      additionalBenefitsHandled = true;
+    }
     if (consumedKeys.has(def.key)) continue;
 
     const group = keyToGroup.get(def.key);
@@ -2222,9 +2707,12 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
 
     const compute = CHART_COMPUTE[def.key];
     if (!compute) continue;
-    const result = compute(dataset);
+    const result = def.key === "contribution-strategy"
+      ? contributionResult
+      : compute(dataset);
     const view = selectedView(def.key);
 
+    if (result.kind === "benchmark") continue;
     if (result.kind === "renewal" && !result.available) continue;
     ensureSection(def.category);
     renderedResults.push(result);
@@ -2287,6 +2775,25 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
       else addMapSlide(pres, result, primary, secondary);
     }
     else addTableSlide(pres, result, primary, secondary);
+
+    const automaticMarketResults =
+      def.key === "contribution-strategy"
+        ? [
+            mercerResults["mercer-medical-cost-benchmark"],
+            mercerResults["mercer-medical-plan-design"],
+          ]
+        : def.key === "plan-option-enrollment"
+          ? [mercerResults["mercer-medical-plan-prevalence"]]
+          : [];
+    for (const marketResult of automaticMarketResults) {
+      if (marketResult.kind !== "benchmark" || !marketResult.available) continue;
+      renderedResults.push(marketResult);
+      addMercerBenchmarkSlides(pres, marketResult, primary, secondary);
+    }
+  }
+
+  if (!additionalBenefitsHandled && additionalBenefits.length > 0) {
+    addAdditionalBenefitsSlide(pres, additionalBenefits, primary, secondary);
   }
 
   addRecommendationsSlide(

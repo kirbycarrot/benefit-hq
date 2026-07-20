@@ -10,7 +10,10 @@ import {
   tierCombinedBarResult,
   tierTableResult,
 } from "@/lib/charts/viewTransforms";
-import { renderStackedBarChartSvg } from "@/lib/charts/svgRender";
+import {
+  renderPieChartSvg,
+  renderStackedBarChartSvg,
+} from "@/lib/charts/svgRender";
 
 test("chart views use curated defaults and reject unsupported persisted values", () => {
   assert.equal(chartView("geographic-distribution"), "map");
@@ -88,4 +91,21 @@ test("participation and tier results transform into alternate chart views", () =
   );
   assert.match(svg, /80%/);
   assert.doesNotMatch(svg, /NaN/);
+});
+
+test("pie chart labels add separators to large values", () => {
+  const svg = renderPieChartSvg(
+    {
+      kind: "pie",
+      title: "Annual cost split",
+      data: [
+        { name: "Employer", value: 2_699_947.56 },
+        { name: "Employee", value: 894_500.16 },
+      ],
+    },
+    ["D4A820", "111111"]
+  );
+
+  assert.match(svg, />2,699,947\.56<\/text>/);
+  assert.match(svg, />894,500\.16<\/text>/);
 });

@@ -79,12 +79,18 @@ test("new client intake rejects impossible renewal dates", () => {
   assert.equal(result.success, false);
 });
 
-test("onboarding progress reconciles the five workflow sections", () => {
+test("onboarding progress excludes optional documents from completion", () => {
   const value = onboarding();
-  const progress = computeOnboardingProgress(value, 1);
-  assert.equal(progress.percentage, 100);
-  assert.equal(progress.completed, progress.total);
-  assert.equal(progress.sections.documents.percentage, 100);
+  const withoutDocuments = computeOnboardingProgress(value, 0);
+  const withDocuments = computeOnboardingProgress(value, 12);
+
+  assert.equal(withoutDocuments.percentage, 100);
+  assert.equal(withoutDocuments.completed, withoutDocuments.total);
+  assert.equal(withoutDocuments.documentCount, 0);
+  assert.equal(withDocuments.percentage, withoutDocuments.percentage);
+  assert.equal(withDocuments.completed, withoutDocuments.completed);
+  assert.equal(withDocuments.total, withoutDocuments.total);
+  assert.equal(withDocuments.documentCount, 12);
 });
 
 test("client document detection checks both extension and file signature", () => {

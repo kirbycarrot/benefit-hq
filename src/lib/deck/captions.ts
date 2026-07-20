@@ -1,4 +1,5 @@
 import type { ChartResult } from "@/lib/charts/types";
+import { formatNumber, formatWholeNumber } from "@/lib/number-format";
 
 // Short, purely data-derived sentence per chart — no invented benchmarks or claims,
 // just a factual highlight computed from the same numbers shown in the chart/table.
@@ -9,7 +10,7 @@ export function generateCaption(result: ChartResult): string {
     const share = result.mappedEmployees
       ? Math.round((top.value / result.mappedEmployees) * 100)
       : 0;
-    return `${top.name} has the largest mapped employee concentration: ${top.value} (${share}% of mapped employees).`;
+    return `${top.name} has the largest mapped employee concentration: ${formatWholeNumber(top.value)} (${share}% of mapped employees).`;
   }
 
   if (result.kind === "pie") {
@@ -17,7 +18,7 @@ export function generateCaption(result: ChartResult): string {
     const top = [...result.data].sort((a, b) => b.value - a.value)[0];
     if (!top || total === 0) return "";
     const share = Math.round((top.value / total) * 100);
-    return `${top.name} accounts for ${share}% of the total (${top.value} of ${total}).`;
+    return `${top.name} accounts for ${share}% of the total (${formatNumber(top.value)} of ${formatNumber(total)}).`;
   }
 
   if (result.kind === "bar") {
@@ -34,7 +35,7 @@ export function generateCaption(result: ChartResult): string {
       const top = [...seriesValues].sort((a, b) => b.value - a.value)[0];
       if (!top || total === 0) return "";
       const share = Math.round((top.value / total) * 100);
-      return `Largest tier: ${top.label} — ${top.value} (${share}%).`;
+      return `Largest tier: ${top.label} — ${formatNumber(top.value)} (${share}%).`;
     }
 
     const rows = result.data.map((d) => ({
@@ -45,7 +46,7 @@ export function generateCaption(result: ChartResult): string {
     const top = [...rows].sort((a, b) => b.total - a.total)[0];
     if (!top || grandTotal === 0) return "";
     const share = Math.round((top.total / grandTotal) * 100);
-    return `Largest group: ${top.label} — ${top.total} (${share}%).`;
+    return `Largest group: ${top.label} — ${formatNumber(top.total)} (${share}%).`;
   }
 
   if (result.kind === "table") {

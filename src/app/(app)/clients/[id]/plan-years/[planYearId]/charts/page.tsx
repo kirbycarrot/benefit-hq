@@ -6,6 +6,11 @@ import { CHART_COMPUTE } from "@/lib/charts/compute";
 import { ChartSelectionScreen } from "@/components/ChartSelectionScreen";
 import { DeckGenerator } from "@/components/DeckGenerator";
 import type { ChartResult } from "@/lib/charts/types";
+import { loadBenchmarkDashboard } from "@/lib/benchmarks/server";
+import {
+  buildMercerChartResults,
+  clientMedicalCostContext,
+} from "@/lib/benchmarks/charts";
 import {
   normalizeCoverageTierViews,
   type ChartSelection,
@@ -44,9 +49,34 @@ export default async function ChartsPage({
 
   let chartResults: Record<string, ChartResult> = {};
   if (planYear._count.employees > 0) {
-    const dataset = await loadChartDataset(planYearId);
+    const [dataset, benchmarkData] = await Promise.all([
+      loadChartDataset(planYearId),
+      loadBenchmarkDashboard(planYearId, clientId),
+    ]);
+    const contributionResult = CHART_COMPUTE["contribution-strategy"](dataset);
+    if (contributionResult.kind !== "contribution") {
+      throw new Error("Contribution strategy returned an unexpected result type");
+    }
+    const mercerResults = buildMercerChartResults(
+      benchmarkData,
+      clientMedicalCostContext(contributionResult, dataset.employees.length)
+    );
+    const costBenchmark = mercerResults["mercer-medical-cost-benchmark"];
+    const contributionWithMarketContext =
+      costBenchmark.kind === "benchmark" &&
+      costBenchmark.available &&
+      costBenchmark.mode === "cost" &&
+      costBenchmark.medicalCostPerEmployee.available
+        ? {
+            ...contributionResult,
+            medicalCostPerEmployeeBenchmark: costBenchmark.medicalCostPerEmployee,
+          }
+        : contributionResult;
     chartResults = Object.fromEntries(
       chartDefinitions.map((def) => {
+        if (def.key === "contribution-strategy") {
+          return [def.key, contributionWithMarketContext];
+        }
         const compute = CHART_COMPUTE[def.key];
         return [def.key, compute ? compute(dataset) : undefined];
       })
@@ -65,7 +95,8 @@ export default async function ChartsPage({
         Charts &amp; tables
       </h1>
       <p className="mb-[22px] max-w-[560px] text-sm text-text-600">
-        Choose which standard charts and tables to include in the generated deck.
+        Choose the company charts and tables to include. Matching Mercer context is applied
+        automatically in the background.
       </p>
 
       {planYear._count.employees === 0 ? (

@@ -17,14 +17,12 @@ export function Header({
         <span className="text-[15px] font-extrabold text-text-900">Benefit HQ</span>
       </Link>
       <div className="flex min-w-0 items-center gap-3 sm:gap-[22px]">
-        {isAdmin && (
-          <Link
-            href="/settings"
-            className="text-[13px] font-semibold whitespace-nowrap text-text-600 hover:text-text-900"
-          >
-            Settings
-          </Link>
-        )}
+        <Link
+          href={isAdmin ? "/settings/users" : "/settings"}
+          className="rounded-full border border-input-border bg-white px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap text-text-900 hover:border-text-300"
+        >
+          Settings
+        </Link>
         <span className="hidden max-w-[240px] truncate text-[13px] text-text-600 md:block">
           {userEmail}
         </span>

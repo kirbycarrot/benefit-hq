@@ -9,6 +9,7 @@ export const BENEFIT_TYPES = [
   "VoluntaryLife",
   "STD",
   "LTD",
+  "VoluntaryOfferings",
 ] as const;
 
 export type BenefitType = (typeof BENEFIT_TYPES)[number];
@@ -52,6 +53,11 @@ export const BENEFIT_META: Record<
     description: "LTD provisions by employee class",
     sortOrder: 70,
   },
+  VoluntaryOfferings: {
+    label: "Voluntary Plan Offerings",
+    description: "Additional voluntary and supplemental benefits offered to employees",
+    sortOrder: 80,
+  },
 };
 
 export const PLAN_SUBTYPES: Record<BenefitType, readonly string[]> = {
@@ -62,7 +68,31 @@ export const PLAN_SUBTYPES: Record<BenefitType, readonly string[]> = {
   VoluntaryLife: ["Employee", "Spouse", "Child"],
   STD: ["STD"],
   LTD: ["LTD"],
+  VoluntaryOfferings: ["Voluntary Offerings"],
 };
+
+export const VOLUNTARY_PLAN_OFFERINGS = [
+  { key: "accident", label: "Accident" },
+  { key: "cancerCriticalIllness", label: "Cancer / Critical Illness" },
+  { key: "hospitalIndemnity", label: "Hospital indemnity" },
+  { key: "vision", label: "Vision" },
+  { key: "individualDisabilityInsurance", label: "Individual Disability Insurance" },
+  { key: "wholeUniversalLife", label: "Whole / Universal Life" },
+  { key: "longTermCare", label: "Long-Term Care" },
+  { key: "autoHomeowners", label: "Auto / Homeowners" },
+  { key: "idTheft", label: "ID Theft" },
+  { key: "legalBenefits", label: "Legal Benefits" },
+  { key: "discountPurchaseProgram", label: "Discount Purchase Program" },
+  {
+    key: "studentLoanRefinancingRepayment",
+    label: "Student Loan Refinancing / Repayment",
+  },
+  { key: "petInsurance", label: "Pet Insurance" },
+  { key: "lifestyleSpendingAccount", label: "Lifestyle Spending Account" },
+] as const;
+
+export const VOLUNTARY_OFFERINGS_PLAN_NAME = "Additional Benefits Offered";
+export const VOLUNTARY_OFFERINGS_PLAN_SUBTYPE = "Voluntary Offerings";
 
 export const RATE_BENEFIT_TYPES = ["Medical", "Dental", "Vision"] as const;
 
@@ -109,6 +139,7 @@ export type PolicyDetailField = {
   key: string;
   label: string;
   type: "text" | "select" | "currency" | "number" | "percent";
+  max?: number;
   options?: readonly string[];
   help?: string;
   suffix?: string;
@@ -151,6 +182,8 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
           key: "aggregateCorridor",
           label: "Aggregate corridor",
           type: "percent",
+          max: 500,
+          help: "Aggregate stop-loss corridors commonly exceed 100% (for example, 125%).",
           showWhen: { key: "fundingArrangement", equals: "Self-Funded" },
         },
         {
@@ -319,6 +352,7 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
       ],
     },
   ],
+  VoluntaryOfferings: [],
 };
 
 const emptyStringToUndefined = (value: unknown) => (value === "" || value === null ? undefined : value);
@@ -455,10 +489,15 @@ function validateDetailValues(
         });
       }
     }
-    if (field.type === "percent" && typeof value === "number" && value > 100) {
+    const maximumPercent = field.max ?? 100;
+    if (
+      field.type === "percent" &&
+      typeof value === "number" &&
+      value > maximumPercent
+    ) {
       context.addIssue({
         code: "custom",
-        message: `${field.label} cannot exceed 100%`,
+        message: `${field.label} cannot exceed ${maximumPercent}%`,
         path: ["plans", planIndex, "details", field.key],
       });
     }
@@ -592,6 +631,14 @@ export function inferPlanSubtype(benefitType: RateBenefitType, planName: string)
 
 export function isRateBenefitType(value: BenefitType): value is RateBenefitType {
   return RATE_BENEFIT_TYPES.includes(value as RateBenefitType);
+}
+
+export function selectedVoluntaryPlanOfferings(details: unknown): string[] {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return [];
+  const values = details as Record<string, unknown>;
+  return VOLUNTARY_PLAN_OFFERINGS.filter((offering) => values[offering.key] === true).map(
+    (offering) => offering.label
+  );
 }
 
 export function numericDetail(details: PolicyPlanDetails, key: string): number | null {

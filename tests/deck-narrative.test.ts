@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ChartResult } from "@/lib/charts/types";
+import { generateCaption } from "@/lib/deck/captions";
 import {
   buildDeckRecommendations,
   insightTitle,
@@ -55,4 +56,24 @@ test("section copy provides an audience-facing transition", () => {
     subtitle: "How rates and contributions shape the renewal outlook.",
   });
   assert.equal(sectionNarrative("appendix").title, "Data quality appendix");
+});
+
+test("deck captions add separators to large values", () => {
+  const result = {
+    kind: "pie",
+    title: "Employer vs. Employee Cost Split",
+    data: [
+      { name: "Employer", value: 2_699_947.56 },
+      { name: "Employee", value: 894_500.16 },
+    ],
+  } satisfies Extract<ChartResult, { kind: "pie" }>;
+
+  assert.equal(
+    generateCaption(result),
+    "Employer accounts for 75% of the total (2,699,947.56 of 3,594,447.72)."
+  );
+  assert.equal(
+    insightTitle(result),
+    "Employer accounts for 75% of the total (2,699,947.56 of 3,594,447.72)"
+  );
 });

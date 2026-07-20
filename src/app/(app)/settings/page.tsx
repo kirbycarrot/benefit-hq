@@ -1,29 +1,17 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { UsersManager } from "@/components/UsersManager";
 
 export default async function SettingsPage() {
   const session = await auth();
-  if (!session?.user?.isAdmin) notFound();
-
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, email: true, isAdmin: true },
-  });
+  if (session?.user?.isAdmin) redirect("/settings/users");
 
   return (
-    <div>
-      <h1 className="text-[26px] font-extrabold text-text-900">Settings</h1>
-
-      <div className="mt-8">
-        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Users</h2>
-        <p className="mb-[18px] text-sm text-text-600">
-          Admins can create and remove accounts. Everyone in the workspace shares the same
-          clients and data.
-        </p>
-        <UsersManager users={users} currentUserId={session.user.id} />
-      </div>
-    </div>
+    <section className="max-w-[720px] rounded-[14px] border border-border-light bg-white p-5 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-7">
+      <h2 className="text-[19px] font-extrabold text-text-900">Account</h2>
+      <p className="mt-2 text-sm leading-6 text-text-600">
+        You are signed in as <span className="font-semibold text-text-900">{session?.user?.email}</span>.
+        User and client administration is available to workspace administrators.
+      </p>
+    </section>
   );
 }

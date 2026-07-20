@@ -1,5 +1,6 @@
 import type { ChartResult } from "@/lib/charts/types";
 import { generateCaption } from "@/lib/deck/captions";
+import { formatDisplayValue, formatWholeNumber } from "@/lib/number-format";
 
 export type DeckRecommendation = {
   priority: "Immediate attention" | "Renewal consideration" | "Longer-term opportunity";
@@ -101,7 +102,7 @@ export function insightTitle(result: ChartResult, fallback = result.title): stri
   if (result.kind === "risk") {
     const continuity = result.indicators.find((indicator) => indicator.key === "continuity-exposure");
     if (continuity)
-      return `${continuity.value} employees combine age 60+ with 10+ years of service`;
+      return `${formatWholeNumber(continuity.value)} employees combine age 60+ with 10+ years of service`;
   }
 
   if (result.kind === "quality") {
@@ -142,9 +143,9 @@ export function insightTitle(result: ChartResult, fallback = result.title): stri
   if (result.kind === "table" && result.rows.length > 0) {
     const first = result.rows[0];
     if (result.columns.some((column) => column.toLowerCase() === "employees"))
-      return concise(`${first[0]} is the most common option with ${first[1]} employees`);
+      return concise(`${first[0]} is the most common option with ${formatDisplayValue(first[1])} employees`);
     if (result.columns.some((column) => column.toLowerCase() === "participants"))
-      return concise(`${first[0]} leads participation with ${first[1]} participants`);
+      return concise(`${first[0]} leads participation with ${formatDisplayValue(first[1])} participants`);
     return concise(`${first[0]} leads the reported results`);
   }
 
@@ -159,7 +160,7 @@ export function takeawayForResult(result: ChartResult): string {
     if (!lowest) return result.note;
     const unreported = result.benefits.reduce((sum, benefit) => sum + benefit.unreported, 0);
     return unreported > 0
-      ? `${lowest.name} has the lowest participation at ${percent(lowest.participation)}; ${unreported} benefit ${unreported === 1 ? "election is" : "elections are"} not recorded across the three programs.`
+      ? `${lowest.name} has the lowest participation at ${percent(lowest.participation)}; ${formatWholeNumber(unreported)} benefit ${unreported === 1 ? "election is" : "elections are"} not recorded across the three programs.`
       : `${lowest.name} has the lowest participation at ${percent(lowest.participation)}, defining the clearest enrollment opportunity.`;
   }
 
@@ -181,12 +182,12 @@ export function takeawayForResult(result: ChartResult): string {
   if (result.kind === "table" && result.rows.length > 0) {
     const first = result.rows[0];
     if (result.columns.some((column) => column.toLowerCase() === "employees"))
-      return `${first[0]} is the largest reported option with ${first[1]} employees.`;
+      return `${first[0]} is the largest reported option with ${formatDisplayValue(first[1])} employees.`;
     if (result.columns.some((column) => column.toLowerCase() === "participants")) {
       const participationIndex = result.columns.findIndex(
         (column) => column.toLowerCase() === "participation"
       );
-      return `${first[0]} leads with ${first[1]} participants${participationIndex >= 0 ? ` and ${first[participationIndex]} participation` : ""}.`;
+      return `${first[0]} leads with ${formatDisplayValue(first[1])} participants${participationIndex >= 0 ? ` and ${first[participationIndex]} participation` : ""}.`;
     }
   }
 
@@ -207,7 +208,7 @@ export function buildDeckRecommendations(results: ChartResult[]): DeckRecommenda
     add({
       priority: "Immediate attention",
       title: "Resolve the remaining data gaps before final renewal decisions",
-      detail: `${quality.unmatchedElections} elections are unmatched and core census completeness is ${percent(quality.censusCompleteness)}.`,
+      detail: `${formatWholeNumber(quality.unmatchedElections)} elections are unmatched and core census completeness is ${percent(quality.censusCompleteness)}.`,
     });
   }
 
@@ -221,7 +222,7 @@ export function buildDeckRecommendations(results: ChartResult[]): DeckRecommenda
       add({
         priority: "Immediate attention",
         title: "Reconcile elections that are neither enrolled nor waived",
-        detail: `${unreported} election ${unreported === 1 ? "record is" : "records are"} not recorded across Medical, Dental, and Vision.`,
+        detail: `${formatWholeNumber(unreported)} election ${unreported === 1 ? "record is" : "records are"} not recorded across Medical, Dental, and Vision.`,
       });
     }
     if (lowest && lowest.participation < 85) {
@@ -269,7 +270,7 @@ export function buildDeckRecommendations(results: ChartResult[]): DeckRecommenda
     add({
       priority: "Longer-term opportunity",
       title: "Incorporate workforce continuity into benefits planning",
-      detail: `${continuity.value} employees (${percent(continuity.percentage)}) combine age 60+ with 10+ years of service.`,
+      detail: `${formatWholeNumber(continuity.value)} employees (${percent(continuity.percentage)}) combine age 60+ with 10+ years of service.`,
     });
   }
 

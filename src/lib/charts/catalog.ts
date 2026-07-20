@@ -123,7 +123,7 @@ export const CHART_DEFINITIONS = [
     description: "Percentage of eligible employees waiving medical, dental, or vision coverage.",
     category: "participation & enrollment",
     defaultEnabled: false,
-    sortOrder: 260,
+    sortOrder: 280,
   },
 
   // Workforce Profile
