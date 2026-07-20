@@ -49,7 +49,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const result = await importClientExportPayload(payload, { createdById: session.user.id });
-
-  return NextResponse.json({ id: result.clientId, warnings: result.warnings });
+  try {
+    const result = await importClientExportPayload(payload, { createdById: session.user.id });
+    return NextResponse.json({ id: result.clientId, warnings: result.warnings });
+  } catch (error) {
+    console.error("Client import failed", error);
+    return NextResponse.json({ error: "Unable to import this client. No data was changed." }, { status: 500 });
+  }
 }

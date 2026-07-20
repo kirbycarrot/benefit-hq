@@ -856,8 +856,14 @@ async function importClientRecords(
         ? await tx.user.findMany({ where: { email: { in: uploaderEmails } }, select: { id: true, email: true } })
         : [];
       const uploaderIdByEmail = new Map(uploaders.map((u) => [u.email, u.id]));
+      const unresolvedUploaderEmails = new Set<string>();
 
       for (const document of savedDocuments) {
+        const uploadedById = document.uploadedByEmail ? (uploaderIdByEmail.get(document.uploadedByEmail) ?? null) : null;
+        if (document.uploadedByEmail && !uploadedById) {
+          unresolvedUploaderEmails.add(document.uploadedByEmail);
+        }
+
         await tx.clientDocument.create({
           data: {
             clientId: client.id,
@@ -867,10 +873,14 @@ async function importClientRecords(
             filePath: document.filePath,
             mediaType: document.mediaType,
             sizeBytes: document.sizeBytes,
-            uploadedById: document.uploadedByEmail ? (uploaderIdByEmail.get(document.uploadedByEmail) ?? null) : null,
+            uploadedById,
             uploadedAt: new Date(document.uploadedAt),
           },
         });
+      }
+
+      for (const email of unresolvedUploaderEmails) {
+        warnings.push(`Document uploader information for ${email} was dropped: no user with that email exists here.`);
       }
     }
 
