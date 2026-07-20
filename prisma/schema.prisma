@@ -218,6 +218,7 @@ model ClientDocument {
   uploadedById     String?
   uploadedBy       User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
   uploadedAt       DateTime  @default(now())
+  extractedFields  Json? // heuristic field extraction results, currently populated for category "sbc" only
 
   @@index([clientId, category])
   @@index([planYearId])
@@ -264,6 +265,7 @@ model BenefitPlan {
   subtype             String
   offered             Boolean        @default(true)
   details             Json           @default("{}")
+  customAttributes    Json           @default("[]") // { label, value }[] — internal reference only, not read by charts/decks
   detailSchemaVersion Int            @default(1)
   renewedFromPlanId   String?
   renewedFromPlan     BenefitPlan?   @relation("BenefitPlanRenewal", fields: [renewedFromPlanId], references: [id], onDelete: SetNull)

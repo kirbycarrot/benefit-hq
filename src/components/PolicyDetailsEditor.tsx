@@ -6,6 +6,7 @@ import { readApiError } from "@/lib/api-response";
 import {
   BENEFIT_META,
   BENEFIT_TYPES,
+  DEFAULT_RATE_BASIS,
   PLAN_SUBTYPES,
   POLICY_TIER_LABELS,
   TIER_TEMPLATE_LABELS,
@@ -15,14 +16,20 @@ import {
   VOLUNTARY_PLAN_OFFERINGS,
   type BenefitType,
   type CensusPlanSuggestion,
+  type CustomPlanAttribute,
   type PolicyDetailField,
   type PolicyDetailValue,
+  type PolicyPlanDetails,
   type PolicyPlanInput,
   type PolicyProgramInput,
   type PolicyRateInput,
   type PolicyTierCode,
   type RateBenefitType,
   type TierTemplate,
+  computeAncillaryPremium,
+  estimateActuarialValue,
+  inferPlanSubtype,
+  isAncillaryVolumeBenefitType,
   isRateBenefitType,
   normalizePolicyName,
   policyReadinessIssues,
@@ -31,10 +38,12 @@ import {
   visibleDetailGroups,
 } from "@/lib/policy-details";
 import { RATE_PERIOD_LABELS, RATE_PERIODS } from "@/lib/validation";
+import type { SbcExtractedFields } from "@/lib/sbc/parse";
 
 type EditorPlan = PolicyPlanInput & { clientKey: string };
 type EditorProgram = Omit<PolicyProgramInput, "plans"> & { plans: EditorPlan[] };
 type VoluntaryOfferingKey = (typeof VOLUNTARY_PLAN_OFFERINGS)[number]["key"];
+type PendingSbcExtraction = { id: string; filename: string; uploadedAt: string; fields: SbcExtractedFields };
 
 const inputClass =
   "h-11 w-full rounded-[10px] border border-input-border bg-white px-3 text-[13px] text-text-900 focus:border-teal-deep focus:outline-none";
@@ -46,12 +55,16 @@ export function PolicyDetailsEditor({
   censusSuggestions,
   canCopyPrior,
   carriersByBenefitType,
+  censusVolumeByBenefitType,
+  pendingSbcExtractions,
 }: {
   planYearId: string;
   initialPrograms: PolicyProgramInput[];
   censusSuggestions: CensusPlanSuggestion[];
   canCopyPrior: boolean;
   carriersByBenefitType: Record<string, string[]>;
+  censusVolumeByBenefitType: Partial<Record<BenefitType, number>>;
+  pendingSbcExtractions: PendingSbcExtraction[];
 }) {
   const router = useRouter();
   const [programs, setPrograms] = useState<EditorProgram[]>(() =>
@@ -119,17 +132,42 @@ export function PolicyDetailsEditor({
         offered: true,
         details: isRateBenefitType(benefitType)
           ? { tierStructure: "four-tier" }
-          : {},
+          : isAncillaryVolumeBenefitType(benefitType)
+            ? { rateBasis: DEFAULT_RATE_BASIS[benefitType] }
+            : {},
         detailSchemaVersion: 1,
         renewedFromPlanId: null,
         sortOrder: program.plans.length,
         aliases: [],
+        customAttributes: [],
         rates: isRateBenefitType(benefitType)
           ? createBlankRates("four-tier")
           : [],
       };
       return { ...program, offered: true, plans: [...program.plans, plan] };
     });
+  }
+
+  function addPlanFromSbc(extraction: PendingSbcExtraction) {
+    updateProgram("Medical", (program) => {
+      const subtype = inferPlanSubtype("Medical", extraction.fields.planNameGuess ?? "");
+      const plan: EditorPlan = {
+        clientKey: makeClientKey(),
+        name: extraction.fields.planNameGuess?.slice(0, 100) || `Plan from ${extraction.filename}`,
+        carrierName: null,
+        subtype,
+        offered: true,
+        details: { tierStructure: "four-tier", ...detailsFromSbc(extraction.fields) },
+        detailSchemaVersion: 1,
+        renewedFromPlanId: null,
+        sortOrder: program.plans.length,
+        aliases: [],
+        customAttributes: [],
+        rates: createBlankRates("four-tier"),
+      };
+      return { ...program, offered: true, plans: [...program.plans, plan] };
+    });
+    setActiveBenefit("Medical");
   }
 
   function addCensusPlans(benefitType: RateBenefitType) {
@@ -153,6 +191,7 @@ export function PolicyDetailsEditor({
           renewedFromPlanId: null,
           sortOrder: program.plans.length + index,
           aliases: [suggestion.planName],
+          customAttributes: [],
           rates: createBlankRates("four-tier", suggestion.tierEnrollments),
         }));
       return {
@@ -358,6 +397,28 @@ export function PolicyDetailsEditor({
         </div>
 
         <div className="space-y-4 p-4 sm:p-6">
+          {activeBenefit === "Medical" && pendingSbcExtractions.length > 0 && (
+            <div className="rounded-[12px] border border-dashed border-teal-deep/40 bg-teal-deep/5 px-4 py-3.5">
+              <p className="text-xs font-bold text-text-900">SBC documents uploaded above</p>
+              <ul className="mt-2 space-y-2">
+                {pendingSbcExtractions.map((extraction) => (
+                  <li
+                    key={extraction.id}
+                    className="flex flex-col gap-2 text-[13px] text-text-600 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="min-w-0 truncate">{extraction.filename}</span>
+                    <button
+                      type="button"
+                      onClick={() => addPlanFromSbc(extraction)}
+                      className="shrink-0 rounded-full border border-input-border bg-white px-3.5 py-1.5 text-xs font-semibold text-text-900 hover:border-teal-deep"
+                    >
+                      Create plan from this SBC
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {activeBenefit === "VoluntaryOfferings" ? (
             <VoluntaryOfferingsChecklist
               program={activeProgram}
@@ -389,6 +450,7 @@ export function PolicyDetailsEditor({
                     benefitType={activeBenefit}
                     plan={plan}
                     carrierSuggestions={carriersByBenefitType[activeBenefit] ?? []}
+                    censusVolume={censusVolumeByBenefitType[activeBenefit]}
                     onChange={(updater) => updatePlan(plan.clientKey, updater)}
                     onDuplicate={() => duplicatePlan(plan)}
                     onRemove={() => removePlan(plan.clientKey)}
@@ -465,6 +527,7 @@ function PlanCard({
   benefitType,
   plan,
   carrierSuggestions,
+  censusVolume,
   onChange,
   onDuplicate,
   onRemove,
@@ -472,6 +535,7 @@ function PlanCard({
   benefitType: BenefitType;
   plan: EditorPlan;
   carrierSuggestions: string[];
+  censusVolume: number | undefined;
   onChange: (updater: (plan: EditorPlan) => EditorPlan) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -568,9 +632,22 @@ function PlanCard({
                     />
                   ))}
                 </div>
+                {group.key === "design" && (
+                  <div className="mt-3">
+                    <ActuarialValueHelper plan={plan} onChange={onChange} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
+        )}
+
+        {isAncillaryVolumeBenefitType(benefitType) && (
+          <AncillaryCalculationHelpers
+            plan={plan}
+            censusVolume={censusVolume}
+            onChange={onChange}
+          />
         )}
 
         {isRateBenefitType(benefitType) && (
@@ -645,6 +722,7 @@ function PlanCard({
             className="w-full rounded-[10px] border border-input-border bg-white px-3 py-2 text-[13px] text-text-900 focus:border-teal-deep focus:outline-none"
           />
         </div>
+        <CustomAttributesEditor plan={plan} onChange={onChange} />
         <div>
           <label className={labelClass}>Census plan aliases</label>
           <input
@@ -797,6 +875,174 @@ function RateTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function AncillaryCalculationHelpers({
+  plan,
+  censusVolume,
+  onChange,
+}: {
+  plan: EditorPlan;
+  censusVolume: number | undefined;
+  onChange: (updater: (plan: EditorPlan) => EditorPlan) => void;
+}) {
+  const currentVolume = typeof plan.details.volume === "number" ? plan.details.volume : null;
+  const calculatedPremium = computeAncillaryPremium(plan.details);
+  const currentPremium =
+    typeof plan.details.annualPremium === "number" ? plan.details.annualPremium : null;
+
+  const showCensusVolume =
+    censusVolume !== undefined && Math.round(censusVolume * 100) !== Math.round((currentVolume ?? 0) * 100);
+  const showCalculatedPremium =
+    calculatedPremium !== null && Math.round(calculatedPremium * 100) !== Math.round((currentPremium ?? 0) * 100);
+
+  if (!showCensusVolume && !showCalculatedPremium) return null;
+
+  return (
+    <div className="space-y-2 rounded-[12px] border border-dashed border-input-border bg-white px-4 py-3">
+      {showCensusVolume && (
+        <p className="flex flex-wrap items-center gap-2 text-[13px] text-text-600">
+          Census volume: <strong className="text-text-900">{formatCurrency(censusVolume!)}</strong>
+          <button
+            type="button"
+            onClick={() =>
+              onChange((current) => ({ ...current, details: { ...current.details, volume: censusVolume! } }))
+            }
+            className="rounded-full border border-input-border bg-white px-3 py-1 text-xs font-semibold text-text-900 hover:border-teal-deep"
+          >
+            Use this value
+          </button>
+        </p>
+      )}
+      {showCalculatedPremium && (
+        <p className="flex flex-wrap items-center gap-2 text-[13px] text-text-600">
+          Calculated annual premium (volume ÷ rate basis × rate):{" "}
+          <strong className="text-text-900">{formatCurrency(calculatedPremium!)}</strong>
+          <button
+            type="button"
+            onClick={() =>
+              onChange((current) => ({
+                ...current,
+                details: { ...current.details, annualPremium: calculatedPremium! },
+              }))
+            }
+            className="rounded-full border border-input-border bg-white px-3 py-1 text-xs font-semibold text-text-900 hover:border-teal-deep"
+          >
+            Use this value
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ActuarialValueHelper({
+  plan,
+  onChange,
+}: {
+  plan: EditorPlan;
+  onChange: (updater: (plan: EditorPlan) => EditorPlan) => void;
+}) {
+  const estimated = estimateActuarialValue(plan.details);
+  const current = typeof plan.details.actuarialValue === "number" ? plan.details.actuarialValue : null;
+  if (estimated === null || Math.round(estimated * 10) === Math.round((current ?? 0) * 10)) return null;
+
+  return (
+    <div className="rounded-[12px] border border-dashed border-input-border bg-white px-4 py-3">
+      <p className="flex flex-wrap items-center gap-2 text-[13px] text-text-600">
+        Estimated actuarial value from deductible, coinsurance, and out-of-pocket maximum:{" "}
+        <strong className="text-text-900">{estimated}%</strong>
+        <button
+          type="button"
+          onClick={() =>
+            onChange((current) => ({ ...current, details: { ...current.details, actuarialValue: estimated } }))
+          }
+          className="rounded-full border border-input-border bg-white px-3 py-1 text-xs font-semibold text-text-900 hover:border-teal-deep"
+        >
+          Use this value
+        </button>
+      </p>
+      <p className="mt-1 text-[11px] text-text-400">
+        This is a simplified estimate, not the official CMS AV Calculator — confirm before relying on it.
+      </p>
+    </div>
+  );
+}
+
+function CustomAttributesEditor({
+  plan,
+  onChange,
+}: {
+  plan: EditorPlan;
+  onChange: (updater: (plan: EditorPlan) => EditorPlan) => void;
+}) {
+  function updateAttribute(index: number, patch: Partial<CustomPlanAttribute>) {
+    onChange((current) => ({
+      ...current,
+      customAttributes: current.customAttributes.map((attribute, i) =>
+        i === index ? { ...attribute, ...patch } : attribute
+      ),
+    }));
+  }
+
+  function removeAttribute(index: number) {
+    onChange((current) => ({
+      ...current,
+      customAttributes: current.customAttributes.filter((_, i) => i !== index),
+    }));
+  }
+
+  function addAttribute() {
+    onChange((current) => ({
+      ...current,
+      customAttributes: [...current.customAttributes, { label: "", value: "" }],
+    }));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <label className={labelClass}>Custom attributes</label>
+        <button
+          type="button"
+          onClick={addAttribute}
+          className="text-xs font-semibold text-link hover:text-link-hover"
+        >
+          Add attribute
+        </button>
+      </div>
+      <p className="mb-2 text-[11px] text-text-400">
+        Internal reference only — not used in charts, tables, or the generated deck.
+      </p>
+      {plan.customAttributes.length > 0 && (
+        <div className="space-y-2">
+          {plan.customAttributes.map((attribute, index) => (
+            <div key={index} className="flex gap-2">
+              <input
+                value={attribute.label}
+                onChange={(event) => updateAttribute(index, { label: event.target.value })}
+                placeholder="Label"
+                className={`${inputClass} sm:max-w-[220px]`}
+              />
+              <input
+                value={attribute.value}
+                onChange={(event) => updateAttribute(index, { value: event.target.value })}
+                placeholder="Value"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => removeAttribute(index)}
+                className="shrink-0 text-xs font-semibold text-destructive hover:text-red-800"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1005,6 +1251,7 @@ function createVoluntaryOfferingsPlan(): EditorPlan {
     renewedFromPlanId: null,
     sortOrder: 0,
     aliases: [],
+    customAttributes: [],
     rates: [],
   };
 }
@@ -1034,6 +1281,31 @@ function stripEditorProgram(program: EditorProgram): PolicyProgramInput {
       return plan;
     }),
   };
+}
+
+const SBC_TO_DETAIL_KEY: Record<keyof Omit<SbcExtractedFields, "planNameGuess">, string> = {
+  deductibleIndividual: "deductibleIndividual",
+  deductibleFamily: "deductibleFamily",
+  oopMaximumIndividual: "oopMaximumIndividual",
+  oopMaximumFamily: "oopMaximumFamily",
+  memberCoinsurance: "memberCoinsurance",
+  primaryCareCopay: "primaryCareCopay",
+  specialistCopay: "specialistCopay",
+  urgentCareCopay: "urgentCareCopay",
+  emergencyRoomCopay: "emergencyRoomCopay",
+  genericCopay: "genericCopay",
+  formularyBrandCopay: "formularyBrandCopay",
+  nonFormularyBrandCopay: "nonFormularyBrandCopay",
+  specialtyCopay: "specialtyCopay",
+};
+
+function detailsFromSbc(fields: SbcExtractedFields): PolicyPlanDetails {
+  const details: PolicyPlanDetails = {};
+  for (const [sbcKey, detailKey] of Object.entries(SBC_TO_DETAIL_KEY)) {
+    const value = fields[sbcKey as keyof typeof SBC_TO_DETAIL_KEY];
+    if (value !== null) details[detailKey] = value;
+  }
+  return details;
 }
 
 function createBlankRates(

@@ -104,6 +104,7 @@ export const CLIENT_DOCUMENT_CATEGORIES = [
   "claims",
   "contribution-schedules",
   "census",
+  "sbc",
   "compliance",
   "communications",
 ] as const;
@@ -119,6 +120,7 @@ export const CLIENT_DOCUMENT_CATEGORY_LABELS: Record<ClientDocumentCategory, str
   claims: "Claims reports",
   "contribution-schedules": "Employee contribution schedules",
   census: "Current census",
+  sbc: "Summary of Benefits and Coverage (SBC)",
   compliance: "Compliance documents",
   communications: "Employee communications / benefit guide",
 };

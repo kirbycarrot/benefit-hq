@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   benefitProgramInputSchema,
+  computeAncillaryPremium,
+  estimateActuarialValue,
   policyDetailSummaryGroups,
   policyReadinessIssues,
   policyTierFromCensusOption,
@@ -28,6 +30,7 @@ function medicalProgram(): PolicyProgramInput {
         renewedFromPlanId: null,
         sortOrder: 0,
         aliases: ["Carrier PPO"],
+        customAttributes: [],
         rates: [
           {
             tier: "EE",
@@ -126,6 +129,7 @@ test("voluntary plan offerings persist as an informational checklist", () => {
         renewedFromPlanId: null,
         sortOrder: 0,
         aliases: [],
+        customAttributes: [],
         rates: [],
       },
     ],
@@ -176,4 +180,32 @@ test("census option labels map to the standard policy tiers", () => {
   assert.equal(policyTierFromCensusOption("EE/SP"), "EE+Spouse");
   assert.equal(policyTierFromCensusOption("Employee + Child"), "EE+Child");
   assert.equal(policyTierFromCensusOption("Employee + Family"), "Family");
+});
+
+test("ancillary premium is volume divided by rate basis times rate", () => {
+  assert.equal(
+    computeAncillaryPremium({ volume: 50_000, rate: 0.2, rateBasis: 1000 }),
+    10
+  );
+  assert.equal(
+    computeAncillaryPremium({ volume: 500, rate: 1.15, rateBasis: 100 }),
+    5.75
+  );
+});
+
+test("ancillary premium is null when an input is missing or the rate basis is zero", () => {
+  assert.equal(computeAncillaryPremium({ volume: 50_000, rate: 0.2 }), null);
+  assert.equal(computeAncillaryPremium({ volume: 50_000, rate: 0.2, rateBasis: 0 }), null);
+  assert.equal(computeAncillaryPremium({}), null);
+});
+
+test("actuarial value estimate needs deductible, coinsurance, and OOP max, and stays within a sane range", () => {
+  assert.equal(estimateActuarialValue({ memberCoinsurance: 20 }), null);
+  const estimate = estimateActuarialValue({
+    memberCoinsurance: 20,
+    deductibleIndividual: 1500,
+    oopMaximumIndividual: 6000,
+  });
+  assert.notEqual(estimate, null);
+  assert.equal(estimate! >= 50 && estimate! <= 98, true);
 });

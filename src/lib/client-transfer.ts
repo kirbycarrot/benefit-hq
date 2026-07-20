@@ -148,6 +148,11 @@ const planAliasExportSchema = z.object({
   normalizedAlias: z.string().min(1),
 });
 
+const customAttributeExportSchema = z.object({
+  label: z.string().min(1),
+  value: z.string(),
+});
+
 const benefitPlanExportSchema = z.object({
   exportId: z.string().min(1),
   name: z.string().min(1),
@@ -155,6 +160,7 @@ const benefitPlanExportSchema = z.object({
   subtype: z.string().min(1),
   offered: z.boolean(),
   details: jsonValue,
+  customAttributes: z.array(customAttributeExportSchema).default([]),
   detailSchemaVersion: z.number().int(),
   renewedFromExportId: z.string().nullable(),
   sortOrder: z.number().int(),
@@ -464,6 +470,7 @@ export async function buildClientExportPayload(clientId: string): Promise<Client
             subtype: plan.subtype,
             offered: plan.offered,
             details: plan.details as Prisma.InputJsonValue,
+            customAttributes: plan.customAttributes as { label: string; value: string }[],
             detailSchemaVersion: plan.detailSchemaVersion,
             renewedFromExportId: plan.renewedFromPlanId
               ? (planExportIds.get(plan.renewedFromPlanId) ?? null)
@@ -735,6 +742,7 @@ async function importClientRecords(
               subtype: plan.subtype,
               offered: plan.offered,
               details: plan.details,
+              customAttributes: plan.customAttributes,
               detailSchemaVersion: plan.detailSchemaVersion,
               sortOrder: plan.sortOrder,
             },

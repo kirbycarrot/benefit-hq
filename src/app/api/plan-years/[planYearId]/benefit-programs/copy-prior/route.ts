@@ -83,6 +83,7 @@ export async function POST(
             subtype: plan.subtype,
             offered: plan.offered,
             details: plan.details as Prisma.InputJsonValue,
+            customAttributes: plan.customAttributes as Prisma.InputJsonValue,
             detailSchemaVersion: plan.detailSchemaVersion,
             renewedFromPlanId: plan.id,
             sortOrder: plan.sortOrder,

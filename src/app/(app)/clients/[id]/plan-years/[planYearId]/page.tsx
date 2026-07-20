@@ -3,14 +3,19 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PolicyDetailsEditor } from "@/components/PolicyDetailsEditor";
 import { CensusUploader } from "@/components/CensusUploader";
+import { SbcUploader } from "@/components/SbcUploader";
 import { formatDate } from "@/lib/date";
+import type { SbcExtractedFields } from "@/lib/sbc/parse";
 import {
   BENEFIT_TYPES,
+  CENSUS_ELECTION_BENEFIT_TYPE,
   inferPlanSubtype,
   normalizePolicyName,
   policyTierFromCensusOption,
+  type AncillaryVolumeBenefitType,
   type BenefitType,
   type CensusPlanSuggestion,
+  type CustomPlanAttribute,
   type PolicyPlanDetails,
   type PolicyProgramInput,
   type RateBenefitType,
@@ -48,7 +53,7 @@ export default async function PlanYearDetailPage({
   if (!planYear || planYear.clientId !== clientId) notFound();
 
   const latestUpload = planYear.censusUploads[0];
-  const [electionGroups, priorWithPrograms, carriers] = await Promise.all([
+  const [electionGroups, priorWithPrograms, carriers, volumeGroups, sbcDocuments] = await Promise.all([
     prisma.benefitElection.groupBy({
       by: ["benefitType", "planName", "optionName"],
       where: {
@@ -70,11 +75,47 @@ export default async function PlanYearDetailPage({
         })
       : Promise.resolve(null),
     prisma.carrier.findMany({ orderBy: { name: "asc" } }),
+    prisma.benefitElection.groupBy({
+      by: ["benefitType"],
+      where: {
+        employee: { planYearId },
+        benefitType: { in: Object.values(CENSUS_ELECTION_BENEFIT_TYPE) },
+        volume: { not: null },
+      },
+      _sum: { volume: true },
+    }),
+    prisma.clientDocument.findMany({
+      where: { planYearId, category: "sbc" },
+      orderBy: { uploadedAt: "desc" },
+      take: 10,
+      select: { id: true, originalFilename: true, uploadedAt: true, extractedFields: true },
+    }),
   ]);
   const carriersByBenefitType = carriers.reduce<Record<string, string[]>>((acc, carrier) => {
     (acc[carrier.benefitType] ??= []).push(carrier.name);
     return acc;
   }, {});
+
+  const censusBenefitTypeToPolicy = Object.fromEntries(
+    Object.entries(CENSUS_ELECTION_BENEFIT_TYPE).map(([policyType, censusType]) => [censusType, policyType])
+  ) as Record<string, AncillaryVolumeBenefitType>;
+  const censusVolumeByBenefitType = volumeGroups.reduce<Partial<Record<BenefitType, number>>>(
+    (acc, group) => {
+      const policyType = censusBenefitTypeToPolicy[group.benefitType];
+      if (policyType && group._sum.volume) acc[policyType] = group._sum.volume.toNumber();
+      return acc;
+    },
+    {}
+  );
+
+  const pendingSbcExtractions = sbcDocuments
+    .filter((doc): doc is typeof doc & { extractedFields: object } => Boolean(doc.extractedFields))
+    .map((doc) => ({
+      id: doc.id,
+      filename: doc.originalFilename,
+      uploadedAt: doc.uploadedAt.toISOString(),
+      fields: doc.extractedFields as unknown as SbcExtractedFields,
+    }));
 
   const initialPrograms: PolicyProgramInput[] = planYear.benefitPrograms
     .filter((program) => isBenefitType(program.benefitType))
@@ -88,6 +129,7 @@ export default async function PlanYearDetailPage({
         subtype: plan.subtype,
         offered: plan.offered,
         details: policyPlanDetails(plan.details),
+        customAttributes: customPlanAttributes(plan.customAttributes),
         detailSchemaVersion: 1,
         renewedFromPlanId: plan.renewedFromPlanId,
         sortOrder: plan.sortOrder,
@@ -128,23 +170,7 @@ export default async function PlanYearDetailPage({
         Effective {formatDate(planYear.effectiveDate)}
       </p>
 
-      <div id="policy-details" className="scroll-mt-8">
-        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Policy details</h2>
-        <p className="mb-[18px] max-w-[760px] text-sm text-text-600">
-          Build only the benefits this client offers. Start from census elections or a prior plan year,
-          then expand each plan for rates and policy provisions as needed.
-        </p>
-        <PolicyDetailsEditor
-          key={policyEditorVersion || "empty"}
-          planYearId={planYear.id}
-          initialPrograms={initialPrograms}
-          censusSuggestions={censusSuggestions}
-          canCopyPrior={Boolean(priorWithPrograms)}
-          carriersByBenefitType={carriersByBenefitType}
-        />
-      </div>
-
-      <div id="census" className="mt-10 scroll-mt-8">
+      <div id="census" className="scroll-mt-8">
         <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Census</h2>
         <p className="mb-1 max-w-[640px] text-sm text-text-600">
           {planYear._count.employees > 0
@@ -158,6 +184,33 @@ export default async function PlanYearDetailPage({
           </p>
         )}
         <CensusUploader planYearId={planYear.id} />
+      </div>
+
+      <div id="sbc" className="mt-10 scroll-mt-8">
+        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Summary of Benefits and Coverage</h2>
+        <p className="mb-[18px] max-w-[640px] text-sm text-text-600">
+          Upload a carrier SBC to read its deductible, coinsurance, out-of-pocket maximum, and copay
+          fields, then create a plan pre-filled with what was found.
+        </p>
+        <SbcUploader planYearId={planYear.id} />
+      </div>
+
+      <div id="policy-details" className="mt-10 scroll-mt-8">
+        <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Policy details</h2>
+        <p className="mb-[18px] max-w-[760px] text-sm text-text-600">
+          Build only the benefits this client offers. Start from census elections, an uploaded SBC, or a
+          prior plan year, then expand each plan for rates and policy provisions as needed.
+        </p>
+        <PolicyDetailsEditor
+          key={policyEditorVersion || "empty"}
+          planYearId={planYear.id}
+          initialPrograms={initialPrograms}
+          censusSuggestions={censusSuggestions}
+          canCopyPrior={Boolean(priorWithPrograms)}
+          carriersByBenefitType={carriersByBenefitType}
+          censusVolumeByBenefitType={censusVolumeByBenefitType}
+          pendingSbcExtractions={pendingSbcExtractions}
+        />
       </div>
 
       <div className="mt-10">
@@ -229,6 +282,17 @@ function policyPlanDetails(value: unknown): PolicyPlanDetails {
       const item = entry[1];
       return item === null || ["string", "number", "boolean"].includes(typeof item);
     })
+  );
+}
+
+function customPlanAttributes(value: unknown): CustomPlanAttribute[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is CustomPlanAttribute =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as { label?: unknown }).label === "string" &&
+      typeof (item as { value?: unknown }).value === "string"
   );
 }
 

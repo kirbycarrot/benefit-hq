@@ -326,6 +326,9 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
         },
         { key: "maximumAmount", label: "Maximum amount", type: "currency" },
         { key: "guaranteeIssue", label: "Guarantee issue", type: "currency" },
+        { key: "volume", label: "Volume", type: "currency", help: "Total insured volume, typically supplied by the census." },
+        { key: "rate", label: "Rate", type: "currency" },
+        { key: "rateBasis", label: "Rate basis", type: "number", help: "Premium = (Volume ÷ Rate basis) × Rate." },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -338,6 +341,9 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
       fields: [
         { key: "maximumAmount", label: "Maximum amount", type: "currency" },
         { key: "guaranteeIssue", label: "Guarantee issue", type: "currency" },
+        { key: "volume", label: "Volume", type: "currency", help: "Total insured volume, typically supplied by the census." },
+        { key: "rate", label: "Rate", type: "currency" },
+        { key: "rateBasis", label: "Rate basis", type: "number", help: "Premium = (Volume ÷ Rate basis) × Rate." },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -354,6 +360,9 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
         { key: "benefitPercentage", label: "Benefit percentage", type: "percent" },
         { key: "maximumBenefit", label: "Maximum weekly benefit", type: "currency" },
         { key: "benefitPeriodWeeks", label: "Benefit duration", type: "number", suffix: "weeks, including EP" },
+        { key: "volume", label: "Volume", type: "currency", help: "Total covered weekly benefit or payroll, typically supplied by the census." },
+        { key: "rate", label: "Rate", type: "currency" },
+        { key: "rateBasis", label: "Rate basis", type: "number", help: "Premium = (Volume ÷ Rate basis) × Rate." },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -369,6 +378,9 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
         { key: "benefitPercentage", label: "Benefit percentage", type: "percent" },
         { key: "maximumBenefit", label: "Maximum monthly benefit", type: "currency" },
         { key: "benefitPeriod", label: "Benefit duration", type: "text", help: "The workbook assumes SSNRA / age 65." },
+        { key: "volume", label: "Volume", type: "currency", help: "Total covered monthly benefit or payroll, typically supplied by the census." },
+        { key: "rate", label: "Rate", type: "currency" },
+        { key: "rateBasis", label: "Rate basis", type: "number", help: "Premium = (Volume ÷ Rate basis) × Rate." },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -404,6 +416,15 @@ const detailValueSchema = z.union([
   z.null(),
 ]);
 
+// Free-form label/value pairs a consultant can attach to a plan purely for
+// internal reference. Not read by chart computation or deck generation.
+export const customAttributeSchema = z.object({
+  label: z.string().trim().min(1, "Label is required").max(100),
+  value: z.string().trim().max(500),
+});
+
+export type CustomPlanAttribute = z.infer<typeof customAttributeSchema>;
+
 export const benefitPlanInputSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1, "Plan or class name is required").max(200),
@@ -411,6 +432,7 @@ export const benefitPlanInputSchema = z.object({
   subtype: z.string().trim().min(1).max(100),
   offered: z.boolean(),
   details: z.record(z.string().min(1).max(100), detailValueSchema),
+  customAttributes: z.array(customAttributeSchema).max(20).default([]),
   detailSchemaVersion: z.literal(1).default(1),
   renewedFromPlanId: z.string().min(1).nullable().optional(),
   sortOrder: z.coerce.number().int().min(0).max(10_000),
@@ -667,6 +689,75 @@ export function selectedVoluntaryPlanOfferings(details: unknown): string[] {
 export function numericDetail(details: PolicyPlanDetails, key: string): number | null {
   const value = details[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export const ANCILLARY_VOLUME_BENEFIT_TYPES = ["BasicLife", "VoluntaryLife", "STD", "LTD"] as const;
+export type AncillaryVolumeBenefitType = (typeof ANCILLARY_VOLUME_BENEFIT_TYPES)[number];
+
+export function isAncillaryVolumeBenefitType(
+  value: BenefitType
+): value is AncillaryVolumeBenefitType {
+  return (ANCILLARY_VOLUME_BENEFIT_TYPES as readonly string[]).includes(value);
+}
+
+// Rate basis conventions vary by carrier; these are starting defaults applied
+// when a new plan is created, and can be edited per plan. Life/AD&D is almost
+// universally quoted per $1,000 of volume; STD/LTD rate bases are less
+// consistent across carriers (per $10 of weekly benefit, per $100 of covered
+// payroll, etc.), so $100 is an assumption to confirm against the carrier's
+// actual rate basis rather than a settled convention.
+export const DEFAULT_RATE_BASIS: Record<AncillaryVolumeBenefitType, number> = {
+  BasicLife: 1000,
+  VoluntaryLife: 1000,
+  STD: 100,
+  LTD: 100,
+};
+
+// Maps a policy benefit type onto the literal `BenefitElection.benefitType`
+// string produced by census normalization (src/lib/census/normalize.ts), so
+// ancillary plan volume can be suggested from imported census elections.
+export const CENSUS_ELECTION_BENEFIT_TYPE: Record<AncillaryVolumeBenefitType, string> = {
+  BasicLife: "Life",
+  VoluntaryLife: "VoluntaryLife",
+  STD: "STD",
+  LTD: "LTD",
+};
+
+/** Premium = (Volume ÷ Rate basis) × Rate, the standard ancillary-line rating convention. */
+export function computeAncillaryPremium(details: PolicyPlanDetails): number | null {
+  const volume = numericDetail(details, "volume");
+  const rate = numericDetail(details, "rate");
+  const rateBasis = numericDetail(details, "rateBasis");
+  if (volume === null || rate === null || !rateBasis) return null;
+  return Math.round((volume / rateBasis) * rate * 100) / 100;
+}
+
+/**
+ * Rough actuarial-value estimate from deductible, coinsurance, and
+ * out-of-pocket maximum — the three inputs that drive most of AV in
+ * practice. This is NOT the official CMS AV Calculator (which uses a
+ * continuance-table methodology) or a specific named proprietary formula;
+ * it is a simplified approximation meant to give a directional starting
+ * value, and should be checked against the carrier's filed AV or the CMS
+ * calculator before being relied on.
+ */
+export function estimateActuarialValue(details: PolicyPlanDetails): number | null {
+  const coinsurance = numericDetail(details, "memberCoinsurance");
+  const deductibleIndividual = numericDetail(details, "deductibleIndividual");
+  const oopMaximumIndividual = numericDetail(details, "oopMaximumIndividual");
+  if (coinsurance === null || deductibleIndividual === null || oopMaximumIndividual === null) {
+    return null;
+  }
+
+  const payerShare = 1 - coinsurance / 100;
+  const deductibleDrag = clamp(deductibleIndividual / 20_000, 0, 0.15);
+  const oopDrag = clamp(oopMaximumIndividual / 40_000, 0, 0.08);
+  const estimate = payerShare - deductibleDrag - oopDrag + 0.05;
+  return Math.round(clamp(estimate, 0.5, 0.98) * 1000) / 10;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 export function visibleDetailGroups(benefitType: BenefitType, plan: PolicyPlanInput) {

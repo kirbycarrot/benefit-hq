@@ -133,6 +133,7 @@ export async function PUT(
           subtype: planInput.subtype,
           offered: planInput.offered,
           details: planInput.details as Prisma.InputJsonValue,
+          customAttributes: planInput.customAttributes as Prisma.InputJsonValue,
           detailSchemaVersion: planInput.detailSchemaVersion,
           renewedFromPlanId: planInput.renewedFromPlanId ?? null,
           sortOrder: planInput.sortOrder,
