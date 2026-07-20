@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CHART_DEFINITIONS } from "@/lib/charts/catalog";
+import { CHART_COMPUTE } from "@/lib/charts/compute";
 
 test("chart catalog follows the presentation story order", () => {
   const categories = [...new Set(CHART_DEFINITIONS.map((definition) => definition.category))];
@@ -8,6 +9,7 @@ test("chart catalog follows the presentation story order", () => {
   assert.deepEqual(categories, [
     "overview",
     "renewal & cost",
+    "plan design",
     "participation & enrollment",
     "workforce profile",
     "dependent profile",
@@ -24,6 +26,16 @@ test("chart catalog follows the presentation story order", () => {
   );
 });
 
+test("every chart exposed in the selector has a compute path for PowerPoint export", () => {
+  for (const definition of CHART_DEFINITIONS) {
+    assert.equal(
+      typeof CHART_COMPUTE[definition.key],
+      "function",
+      `${definition.key} is missing a chart computation`
+    );
+  }
+});
+
 test("chart catalog defaults to the concise recommended deck", () => {
   const enabledKeys = CHART_DEFINITIONS.filter(
     (definition) => definition.defaultEnabled
@@ -33,6 +45,7 @@ test("chart catalog defaults to the concise recommended deck", () => {
     "executive-summary",
     "renewal-comparison",
     "contribution-strategy",
+    "plan-design-snapshot",
     "benefits-participation-funnel",
     "plan-option-enrollment",
     "medical-tier-enrollment",

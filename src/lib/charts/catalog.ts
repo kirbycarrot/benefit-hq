@@ -68,6 +68,16 @@ export const CHART_DEFINITIONS = [
     sortOrder: 140,
   },
 
+  // Plan Design
+  {
+    key: "plan-design-snapshot",
+    label: "Policy & Plan Design Snapshot",
+    description: "Recorded funding, deductibles, copays, allowances, life, and disability provisions by plan or class.",
+    category: "plan design",
+    defaultEnabled: true,
+    sortOrder: 150,
+  },
+
   // Participation & Enrollment
   {
     key: "benefits-participation-funnel",

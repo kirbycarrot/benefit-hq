@@ -397,6 +397,15 @@ function computeHeadcountStatTiles(ds: ChartDataset): ChartResult {
   };
 }
 
+function computePlanDesignSnapshot(ds: ChartDataset): ChartResult {
+  return {
+    kind: "plan-design",
+    title: "Policy & Plan Design Snapshot",
+    plans: ds.planDesigns,
+    note: "Only recorded policy provisions are shown; blank fields are omitted.",
+  };
+}
+
 function computeAgeGenderDistribution(ds: ChartDataset): ChartResult {
   const rows = AGE_BANDS.map(([label]) => ({ band: label, Male: 0, Female: 0, Other: 0 }));
 
@@ -1423,6 +1432,7 @@ export const CHART_COMPUTE: Record<string, (ds: ChartDataset) => ChartResult> = 
   "executive-summary": computeExecutiveSummary,
   "workforce-risk-profile": computeWorkforceRiskProfile,
   "headcount-stat-tiles": computeHeadcountStatTiles,
+  "plan-design-snapshot": computePlanDesignSnapshot,
   "age-gender-distribution": computeAgeGenderDistribution,
   "demographic-summary": computeDemographicSummary,
   "tenure-distribution": computeTenureDistribution,

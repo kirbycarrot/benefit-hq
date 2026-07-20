@@ -111,6 +111,22 @@ export type ChartResult =
       note: string;
     }
   | {
+      kind: "plan-design";
+      title: string;
+      plans: Array<{
+        benefitType: string;
+        benefitLabel: string;
+        planName: string;
+        subtype: string;
+        groups: Array<{
+          key: string;
+          label: string;
+          items: Array<{ key: string; label: string; value: string }>;
+        }>;
+      }>;
+      note: string;
+    }
+  | {
       kind: "risk";
       title: string;
       indicators: {

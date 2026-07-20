@@ -154,6 +154,18 @@ export type PolicyDetailGroup = {
   fields: readonly PolicyDetailField[];
 };
 
+export type PolicyDetailSummaryItem = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+export type PolicyDetailSummaryGroup = {
+  key: string;
+  label: string;
+  items: PolicyDetailSummaryItem[];
+};
+
 export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGroup[]> = {
   Medical: [
     {
@@ -657,4 +669,63 @@ export function visibleDetailGroups(benefitType: BenefitType, plan: PolicyPlanIn
       ),
     }))
     .filter((group) => group.fields.length > 0);
+}
+
+export function policyDetailSummaryGroups(
+  benefitType: BenefitType,
+  subtype: string,
+  details: PolicyPlanDetails
+): PolicyDetailSummaryGroup[] {
+  const groups = POLICY_DETAIL_GROUPS[benefitType]
+    .map((group) => ({
+      key: group.key,
+      label: group.label,
+      items: group.fields
+        .filter(
+          (field) =>
+            (!field.subtypes || field.subtypes.includes(subtype)) &&
+            (!field.showWhen || details[field.showWhen.key] === field.showWhen.equals)
+        )
+        .flatMap((field) => {
+          const value = details[field.key];
+          if (value === undefined || value === null || value === "") return [];
+          return [{ key: field.key, label: field.label, value: formatPolicyDetailValue(field, value) }];
+        }),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const notes = details.notes;
+  if (typeof notes === "string" && notes.trim()) {
+    groups.push({
+      key: "notes",
+      label: "Plan notes",
+      items: [{ key: "notes", label: "Notes", value: notes.trim() }],
+    });
+  }
+
+  return groups;
+}
+
+function formatPolicyDetailValue(
+  field: PolicyDetailField,
+  value: PolicyDetailValue
+): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value;
+  if (typeof value !== "number") return "—";
+
+  if (field.type === "currency") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+  if (field.type === "percent") {
+    return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}%`;
+  }
+
+  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+  return field.suffix ? `${formatted} ${field.suffix}` : formatted;
 }

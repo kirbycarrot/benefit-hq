@@ -40,6 +40,14 @@ type ChartDefinition = {
   category: string;
 };
 
+export type AutomaticDeckContent = {
+  additionalBenefits: string[];
+  mercerCostSlides: number;
+  mercerDesignSlides: number;
+  mercerPrevalenceSlides: number;
+  peerLabel: string | null;
+};
+
 const COLORS = ["#1F2937", "#2FE0D2", "#F59E0B", "#6366F1", "#EF4444"];
 const CHART_FONT = { fontFamily: "Inter, sans-serif", fontSize: 11 };
 
@@ -91,11 +99,13 @@ export function ChartSelectionScreen({
   chartDefinitions,
   initialSelections,
   chartResults,
+  automaticContent,
 }: {
   planYearId: string;
   chartDefinitions: ChartDefinition[];
   initialSelections: Record<string, ChartSelection>;
   chartResults: Record<string, ChartResult>;
+  automaticContent: AutomaticDeckContent;
 }) {
   const [selections, setSelections] = useState(initialSelections);
   const [saving, setSaving] = useState(false);
@@ -159,6 +169,10 @@ export function ChartSelectionScreen({
     <div>
       {saving && <p className="mb-2 text-xs text-text-400">Saving...</p>}
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      <AutomaticExportSummary
+        selections={selections}
+        content={automaticContent}
+      />
       {Object.entries(grouped).map(([category, defs]) => (
         <details key={category} open className="group mb-6">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-[12px] border border-border-light bg-panel-tint px-4 py-3 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-deep [&::-webkit-details-marker]:hidden">
@@ -259,6 +273,72 @@ export function ChartSelectionScreen({
         </details>
       ))}
     </div>
+  );
+}
+
+function AutomaticExportSummary({
+  selections,
+  content,
+}: {
+  selections: Record<string, ChartSelection>;
+  content: AutomaticDeckContent;
+}) {
+  const contributionEnabled = selections["contribution-strategy"]?.enabled ?? false;
+  const prevalenceEnabled = selections["plan-option-enrollment"]?.enabled ?? false;
+  const mercerSlides = contributionEnabled
+    ? content.mercerCostSlides + content.mercerDesignSlides
+    : 0;
+  const prevalenceSlides = prevalenceEnabled ? content.mercerPrevalenceSlides : 0;
+  const automaticSlideCount =
+    (content.additionalBenefits.length > 0 ? 1 : 0) + mercerSlides + prevalenceSlides;
+
+  return (
+    <section className="mb-6 rounded-[14px] border border-border-light bg-panel-tint p-4 sm:p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div>
+          <p className="text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
+            Automatic export content
+          </p>
+          <p className="mt-1 text-sm text-text-600">
+            These slides are added from recorded policy data when their related analysis is included.
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-semibold text-text-400">
+          {automaticSlideCount} data-driven {automaticSlideCount === 1 ? "slide" : "slides"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-[10px] bg-white p-4">
+          <p className="text-sm font-semibold text-text-900">Additional Benefits Offered</p>
+          {content.additionalBenefits.length > 0 ? (
+            <p className="mt-1 text-xs leading-5 text-text-600">
+              {content.additionalBenefits.join(" · ")}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-text-400">
+              Omitted because no voluntary offerings are selected.
+            </p>
+          )}
+        </div>
+        <div className="rounded-[10px] bg-white p-4">
+          <p className="text-sm font-semibold text-text-900">Mercer market context</p>
+          {mercerSlides + prevalenceSlides > 0 ? (
+            <p className="mt-1 text-xs leading-5 text-text-600">
+              {mercerSlides + prevalenceSlides} comparison {mercerSlides + prevalenceSlides === 1 ? "slide" : "slides"}
+              {content.peerLabel ? ` using ${content.peerLabel}` : ""}. Context follows the enabled cost and medical-plan analyses.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-text-400">
+              No matching Mercer slide is available for the currently enabled analyses.
+            </p>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 text-[10px] leading-4 text-text-400">
+        The PowerPoint also includes a title page, section dividers, and a closing recommendations slide.
+      </p>
+    </section>
   );
 }
 
@@ -489,6 +569,67 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
           {result.note}
           {marketContext ? ` Mercer source: ${marketContext.datasetTitle}, ${marketContext.surveyYear} (version ${marketContext.version}).` : ""}
         </p>
+      </div>
+    );
+  }
+
+  if (result.kind === "plan-design") {
+    if (result.plans.length === 0) {
+      return (
+        <div className="rounded-[10px] border border-dashed border-border-light bg-panel-tint px-4 py-5 text-center">
+          <p className="text-sm font-semibold text-text-600">
+            No recorded plan provisions are available yet.
+          </p>
+          <p className="mt-1 text-xs text-text-400">
+            Add policy details to populate this preview and its PowerPoint slides.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-3 sm:p-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          {result.plans.map((plan) => {
+            const items = plan.groups.flatMap((group) =>
+              group.items.map((item) => ({ ...item, groupLabel: group.label }))
+            );
+            const previewItems = items.slice(0, 8);
+            return (
+              <div
+                key={`${plan.benefitType}-${plan.planName}`}
+                className="overflow-hidden rounded-[10px] bg-white"
+              >
+                <div className="border-b border-border-lighter px-4 py-3">
+                  <p className="text-[10px] font-bold tracking-[0.06em] text-text-400 uppercase">
+                    {plan.benefitLabel} · {plan.subtype}
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-text-900">{plan.planName}</p>
+                </div>
+                <div className="divide-y divide-border-lighter px-4">
+                  {previewItems.map((item) => (
+                    <div
+                      key={`${item.groupLabel}-${item.key}`}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(110px,auto)] gap-3 py-2 text-xs"
+                    >
+                      <span className="text-text-600">
+                        {item.label}
+                        <span className="ml-1 text-[9px] text-text-400">· {item.groupLabel}</span>
+                      </span>
+                      <span className="text-right font-semibold text-text-900">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {items.length > previewItems.length && (
+                  <p className="border-t border-border-lighter bg-panel-tint px-4 py-2 text-[10px] text-text-400">
+                    +{items.length - previewItems.length} more recorded provisions in the generated deck
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-[10px] leading-4 text-text-400">{result.note}</p>
       </div>
     );
   }

@@ -177,7 +177,7 @@ The additive tables are `BenefitProgram`, `BenefitPlan`, `PlanRate`, and `PlanAl
 
 Each medical plan year retains an advanced **Benchmark QA** workspace for internal exploration. It compares the client's calculated plan rates and provisions with the national Mercer baseline and one focused peer cohort. The application recommends an industry, employer-size, or geographic cohort when the client profile supports it; an advanced override can save a different choice without changing the source data. A comparison is shown only when the company value can be calculated and at least one corresponding Mercer value exists; missing values are never estimated or substituted.
 
-The **Charts & tables** screen contains only company analyses. Matching Mercer context is applied automatically after the contribution strategy and medical plan-enrollment analyses rather than appearing as a selectable benchmark workflow or separate Mercer section. Cost per employee is shown only when at least 90% of active medical elections match policy rates. Unavailable comparisons are omitted quietly, while displayed comparisons retain the national baseline, saved peer cohort, dataset version, and methodology note.
+The **Charts & tables** screen keeps company analyses primary. Matching Mercer context is applied automatically after the contribution strategy and medical plan-enrollment analyses rather than appearing as a selectable benchmark workflow or separate Mercer section. An automatic-export summary shows how many matching Mercer slides will be added for the current selections. Cost per employee is shown only when at least 90% of active medical elections match policy rates. Unavailable comparisons are omitted quietly, while displayed comparisons retain the national baseline, saved peer cohort, dataset version, and methodology note.
 
 The committed benchmark file is versioned independently from plan-year data. Seeding imports it transactionally and records the source workbook checksum, import time, metric count, and cohort count. A later Mercer release can therefore coexist with historical comparisons instead of silently changing prior results.
 
@@ -195,13 +195,14 @@ The extractor reads the workbook as ZIP/XML and never modifies it. Review the ge
 
 ## Charts, tables, and PowerPoint generation
 
-The **Charts & tables** page presents the catalog in collapsible story groups. Individual analyses can be enabled or disabled without changing the underlying census or policy data. The generated deck follows the same catalog order and honors the saved selections.
+The **Charts & tables** page presents the catalog in collapsible story groups. Individual analyses can be enabled or disabled without changing the underlying census or policy data. The generated deck follows the same catalog order and honors the saved selections. The page also previews automatic content—voluntary offerings, matching Mercer comparisons, title and section structure, and closing recommendations—so users know what will be added around their selected analyses.
 
 The concise default presentation includes:
 
 - **Executive Summary** with headcount, average age, average tenure, geographic footprint, medical participation, and automatically generated observations.
 - **Renewal Comparison** with prior-versus-current rates and modeled annual employer, employee, and total cost changes. When only one plan year is available, the preview explains that a comparison year is required and the generated deck omits the renewal slide.
 - **Employer vs. Employee Cost Strategy** with contribution rates, employer-paid percentages, matched enrollment, and estimated annual spend by benefit, plan, and tier.
+- **Policy & Plan Design Snapshot** with recorded funding, deductibles, copays, allowances, life, and disability provisions. Blank fields are omitted, detailed medical plans continue cleanly when needed, and employee/spouse/child voluntary-life classes share one comparison slide.
 - **Benefits Participation & Waivers** for Medical, Dental, and Vision, including eligible, enrolled, waived, not-recorded, and participation totals.
 - **Coverage Tier Enrollment** across Medical, Dental, and Vision.
 - **Workforce Risk & Continuity Profile** combining age and tenure into new-hire, established-workforce, Medicare-horizon, and continuity indicators.

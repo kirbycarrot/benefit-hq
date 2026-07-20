@@ -1889,6 +1889,257 @@ function addAdditionalBenefitsSlide(
   );
 }
 
+function addPlanDesignSlides(
+  pres: PptxGenJS,
+  result: Extract<ChartResult, { kind: "plan-design" }>,
+  primary: string,
+  secondary: string
+) {
+  const voluntaryLifePlans = result.plans.filter(
+    (plan) => plan.benefitType === "VoluntaryLife"
+  );
+  let voluntaryLifeHandled = false;
+
+  for (const plan of result.plans) {
+    if (plan.benefitType === "VoluntaryLife" && voluntaryLifePlans.length > 1) {
+      if (!voluntaryLifeHandled) {
+        addVoluntaryLifeDesignSlide(
+          pres,
+          voluntaryLifePlans,
+          primary,
+          secondary
+        );
+        voluntaryLifeHandled = true;
+      }
+      continue;
+    }
+
+    const items = plan.groups.flatMap((group) =>
+      group.items.map((item) => ({ ...item, groupLabel: group.label }))
+    );
+    const chunks = Array.from(
+      { length: Math.ceil(items.length / 10) },
+      (_, index) => items.slice(index * 10, index * 10 + 10)
+    );
+
+    chunks.forEach((chunk, pageIndex) => {
+      const slide = addContentSlide(pres);
+      addHeader(
+        slide,
+        pageIndex === 0
+          ? planDesignHeadline(plan, items)
+          : `${plan.planName} recorded provisions — continued`,
+        primary,
+        secondary,
+        planDesignTopic(plan)
+      );
+
+      const columnSize = Math.ceil(chunk.length / 2);
+      const rowGap =
+        columnSize <= 2 ? 1.65 : columnSize === 3 ? 1.25 : columnSize === 4 ? 1 : 0.8;
+      [chunk.slice(0, columnSize), chunk.slice(columnSize)].forEach(
+        (column, columnIndex) => {
+          const x = columnIndex === 0 ? 0.68 : 6.88;
+          column.forEach((item, rowIndex) => {
+            const y = 1.5 + rowIndex * rowGap;
+            slide.addText(`${item.groupLabel} · ${item.label}`, {
+              x,
+              y,
+              w: 5.65,
+              h: 0.18,
+              fontSize: 8.2,
+              bold: true,
+              color: "6B7280",
+              charSpacing: 0.15,
+              margin: 0,
+              fit: "shrink",
+            });
+            slide.addText(item.value, {
+              x,
+              y: y + 0.21,
+              w: 5.65,
+              h: 0.3,
+              fontSize: 13.5,
+              bold: true,
+              align: "left",
+              color: stripHash(primary),
+              margin: 0,
+              fit: "shrink",
+            });
+            slide.addShape("line", {
+              x,
+              y: y + 0.58,
+              w: 5.65,
+              h: 0,
+              line: { color: "E2E7E4", pt: 0.6 },
+            });
+          });
+        }
+      );
+
+      addTakeawayPanel(
+        slide,
+        pageIndex === 0
+          ? planDesignTakeaway(plan, items)
+          : `This slide completes the recorded policy provisions for ${plan.planName}.`,
+        primary,
+        secondary,
+        6.05,
+        0.68
+      );
+    });
+  }
+}
+
+function addVoluntaryLifeDesignSlide(
+  pres: PptxGenJS,
+  plans: Extract<ChartResult, { kind: "plan-design" }>['plans'],
+  primary: string,
+  secondary: string
+) {
+  const slide = addContentSlide(pres);
+  addHeader(
+    slide,
+    "Voluntary life separates employee, spouse, and child coverage",
+    primary,
+    secondary,
+    "Voluntary life provisions"
+  );
+
+  plans.slice(0, 3).forEach((plan, planIndex) => {
+    const x = 0.62 + planIndex * 4.18;
+    const items = plan.groups.flatMap((group) => group.items);
+    slide.addText(plan.subtype.toUpperCase(), {
+      x,
+      y: 1.42,
+      w: 3.72,
+      h: 0.18,
+      fontSize: 8,
+      bold: true,
+      color: stripHash(secondary),
+      charSpacing: 0.7,
+      margin: 0,
+    });
+    slide.addText(plan.planName, {
+      x,
+      y: 1.68,
+      w: 3.72,
+      h: 0.38,
+      fontSize: 16,
+      bold: true,
+      color: stripHash(primary),
+      margin: 0,
+      fit: "shrink",
+    });
+
+    items.slice(0, 4).forEach((item, itemIndex) => {
+      const y = 2.25 + itemIndex * 0.82;
+      slide.addText(item.label, {
+        x,
+        y,
+        w: 3.72,
+        h: 0.17,
+        fontSize: 8.2,
+        bold: true,
+        color: "6B7280",
+        margin: 0,
+        fit: "shrink",
+      });
+      slide.addText(item.value, {
+        x,
+        y: y + 0.21,
+        w: 3.72,
+        h: 0.28,
+        fontSize: 13,
+        bold: true,
+        color: stripHash(primary),
+        margin: 0,
+        fit: "shrink",
+      });
+      slide.addShape("line", {
+        x,
+        y: y + 0.57,
+        w: 3.72,
+        h: 0,
+        line: { color: "E2E7E4", pt: 0.6 },
+      });
+    });
+
+    if (planIndex < 2) {
+      slide.addShape("line", {
+        x: x + 3.94,
+        y: 1.42,
+        w: 0,
+        h: 4.05,
+        line: { color: "E2E7E4", pt: 0.75 },
+      });
+    }
+  });
+
+  addTakeawayPanel(
+    slide,
+    "Maximum amounts, guarantee issue, annual premium, and enrollment are recorded separately for each covered class.",
+    primary,
+    secondary,
+    6.05,
+    0.68
+  );
+}
+
+function planDesignHeadline(
+  plan: Extract<ChartResult, { kind: "plan-design" }>['plans'][number],
+  items: Array<{ key: string; value: string }>
+): string {
+  const value = (key: string) => items.find((item) => item.key === key)?.value;
+  const deductible = value("deductibleIndividual");
+  const outOfPocket = value("oopMaximumIndividual");
+  const annualMaximum = value("annualMaximum");
+  const frameAllowance = value("framesAllowance");
+  const benefitPercentage = value("benefitPercentage");
+  const maximumBenefit = value("maximumBenefit");
+  const maximumAmount = value("maximumAmount");
+
+  if (plan.benefitType === "Medical" && deductible && outOfPocket) {
+    return `${plan.planName}: ${deductible} deductible and ${outOfPocket} OOP maximum`;
+  }
+  if (plan.benefitType === "Dental" && annualMaximum) {
+    return `${plan.planName} provides a ${annualMaximum} annual dental maximum`;
+  }
+  if (plan.benefitType === "Vision" && frameAllowance) {
+    return `${plan.planName} includes a ${frameAllowance} frame allowance`;
+  }
+  if ((plan.benefitType === "STD" || plan.benefitType === "LTD") && benefitPercentage) {
+    return maximumBenefit
+      ? `${plan.planName} replaces ${benefitPercentage} of pay up to ${maximumBenefit}`
+      : `${plan.planName} replaces ${benefitPercentage} of covered pay`;
+  }
+  if ((plan.benefitType === "BasicLife" || plan.benefitType === "VoluntaryLife") && maximumAmount) {
+    return `${plan.planName} provides coverage up to ${maximumAmount}`;
+  }
+  return `${plan.planName} plan design at a glance`;
+}
+
+function planDesignTopic(
+  plan: Extract<ChartResult, { kind: "plan-design" }>['plans'][number]
+): string {
+  if (plan.benefitType === "VoluntaryLife") return `Voluntary life · ${plan.subtype}`;
+  if (plan.benefitType === "BasicLife") return "Basic life provisions";
+  if (plan.benefitType === "STD") return "Short-term disability provisions";
+  if (plan.benefitType === "LTD") return "Long-term disability provisions";
+  return `${plan.benefitLabel} plan design · ${plan.subtype}`;
+}
+
+function planDesignTakeaway(
+  plan: Extract<ChartResult, { kind: "plan-design" }>['plans'][number],
+  items: Array<{ key: string; value: string }>
+): string {
+  const funding = items.find((item) => item.key === "fundingArrangement")?.value;
+  if (funding) {
+    return `${plan.planName} is recorded as ${funding.toLowerCase()}; ${items.length} total policy provisions are shown.`;
+  }
+  return `${plan.planName} has ${items.length} recorded provisions in this company-focused policy snapshot.`;
+}
+
 function addBarSlide(
   pres: PptxGenJS,
   result: Extract<ChartResult, { kind: "bar" }>,
@@ -2714,6 +2965,7 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
 
     if (result.kind === "benchmark") continue;
     if (result.kind === "renewal" && !result.available) continue;
+    if (result.kind === "plan-design" && result.plans.length === 0) continue;
     ensureSection(def.category);
     renderedResults.push(result);
 
@@ -2750,6 +3002,8 @@ export async function generateDeckBuffer(planYearId: string): Promise<Buffer> {
         );
       else addContributionStrategySlides(pres, result, primary, secondary);
     }
+    else if (result.kind === "plan-design")
+      addPlanDesignSlides(pres, result, primary, secondary);
     else if (result.kind === "stats") addStatsSlide(pres, result, primary, secondary);
     else if (result.kind === "bar") {
       if (

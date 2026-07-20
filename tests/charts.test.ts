@@ -51,6 +51,7 @@ function dataset(): ChartDataset {
         createdAt: new Date("2026-01-01T00:00:00Z"),
       },
     ],
+    planDesigns: [],
   };
 }
 
@@ -231,6 +232,36 @@ test("premium chart output carries the rate period and enforced total", () => {
   assert.equal(largeResult.kind, "table");
   if (largeResult.kind !== "table") return;
   assert.deepEqual(largeResult.rows[0].slice(-4, -1), ["$500.00", "$1,000.00", "$1,500.00"]);
+});
+
+test("plan design snapshot carries the same recorded provisions into chart output", () => {
+  const ds = dataset();
+  ds.planDesigns = [
+    {
+      benefitType: "Medical",
+      benefitLabel: "Medical",
+      planName: "PPO",
+      subtype: "PPO",
+      groups: [
+        {
+          key: "design",
+          label: "Plan design",
+          items: [
+            { key: "deductibleIndividual", label: "Individual deductible", value: "$1,000" },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const result = CHART_COMPUTE["plan-design-snapshot"](ds);
+
+  assert.equal(result.kind, "plan-design");
+  if (result.kind !== "plan-design") return;
+  assert.equal(result.plans[0].planName, "PPO");
+  assert.deepEqual(result.plans[0].groups[0].items, [
+    { key: "deductibleIndividual", label: "Individual deductible", value: "$1,000" },
+  ]);
 });
 
 test("headcount calculations include medical participation", () => {

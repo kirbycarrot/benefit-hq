@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { loadChartDataset } from "@/lib/charts/dataset";
 import { CHART_COMPUTE } from "@/lib/charts/compute";
-import { ChartSelectionScreen } from "@/components/ChartSelectionScreen";
+import {
+  ChartSelectionScreen,
+  type AutomaticDeckContent,
+} from "@/components/ChartSelectionScreen";
 import { DeckGenerator } from "@/components/DeckGenerator";
 import type { ChartResult } from "@/lib/charts/types";
 import { loadBenchmarkDashboard } from "@/lib/benchmarks/server";
@@ -15,6 +18,7 @@ import {
   normalizeCoverageTierViews,
   type ChartSelection,
 } from "@/lib/charts/viewOptions";
+import { selectedVoluntaryPlanOfferings } from "@/lib/policy-details";
 
 export default async function ChartsPage({
   params,
@@ -25,7 +29,20 @@ export default async function ChartsPage({
 
   const planYear = await prisma.planYear.findUnique({
     where: { id: planYearId },
-    include: { client: true, deckConfig: true, _count: { select: { employees: true } } },
+    include: {
+      client: true,
+      deckConfig: true,
+      _count: { select: { employees: true } },
+      benefitPrograms: {
+        where: { benefitType: "VoluntaryOfferings", offered: true },
+        include: {
+          plans: {
+            where: { offered: true },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
+    },
   });
   if (!planYear || planYear.clientId !== clientId) notFound();
 
@@ -47,7 +64,17 @@ export default async function ChartsPage({
     )
   );
 
+  const additionalBenefits = selectedVoluntaryPlanOfferings(
+    planYear.benefitPrograms[0]?.plans[0]?.details
+  );
   let chartResults: Record<string, ChartResult> = {};
+  let automaticContent: AutomaticDeckContent = {
+    additionalBenefits,
+    mercerCostSlides: 0,
+    mercerDesignSlides: 0,
+    mercerPrevalenceSlides: 0,
+    peerLabel: null,
+  };
   if (planYear._count.employees > 0) {
     const [dataset, benchmarkData] = await Promise.all([
       loadChartDataset(planYearId),
@@ -72,6 +99,36 @@ export default async function ChartsPage({
             medicalCostPerEmployeeBenchmark: costBenchmark.medicalCostPerEmployee,
           }
         : contributionResult;
+    const designBenchmark = mercerResults["mercer-medical-plan-design"];
+    const prevalenceBenchmark = mercerResults["mercer-medical-plan-prevalence"];
+    automaticContent = {
+      additionalBenefits,
+      mercerCostSlides:
+        costBenchmark.kind === "benchmark" &&
+        costBenchmark.available &&
+        costBenchmark.mode === "cost"
+          ? costBenchmark.plans.length
+          : 0,
+      mercerDesignSlides:
+        designBenchmark.kind === "benchmark" &&
+        designBenchmark.available &&
+        designBenchmark.mode === "design"
+          ? designBenchmark.plans.reduce(
+              (count, plan) => count + Math.ceil(plan.designRows.length / 8),
+              0
+            )
+          : 0,
+      mercerPrevalenceSlides:
+        prevalenceBenchmark.kind === "benchmark" &&
+        prevalenceBenchmark.available &&
+        prevalenceBenchmark.mode === "prevalence"
+          ? 1
+          : 0,
+      peerLabel:
+        [costBenchmark, designBenchmark, prevalenceBenchmark].find(
+          (result) => result.kind === "benchmark" && result.available
+        )?.peerLabel ?? null,
+    };
     chartResults = Object.fromEntries(
       chartDefinitions.map((def) => {
         if (def.key === "contribution-strategy") {
@@ -111,6 +168,7 @@ export default async function ChartsPage({
             chartDefinitions={chartDefinitions}
             initialSelections={initialSelections}
             chartResults={chartResults}
+            automaticContent={automaticContent}
           />
           <div className="mt-6">
             <DeckGenerator planYearId={planYearId} />

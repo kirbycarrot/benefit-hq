@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   benefitProgramInputSchema,
+  policyDetailSummaryGroups,
   policyReadinessIssues,
   policyTierFromCensusOption,
   selectedVoluntaryPlanOfferings,
@@ -45,6 +46,40 @@ function medicalProgram(): PolicyProgramInput {
 test("structured medical policy details accept rates, provisions, and aliases", () => {
   const result = benefitProgramInputSchema.safeParse(medicalProgram());
   assert.equal(result.success, true);
+});
+
+test("policy detail summaries format only recorded and visible provisions", () => {
+  const groups = policyDetailSummaryGroups("Medical", "HDHP", {
+    fundingArrangement: "Self-Funded",
+    deductibleIndividual: 2300,
+    memberCoinsurance: 20,
+    primaryCareCopay: 30,
+    hsaContributionFamily: 1500,
+  });
+
+  assert.deepEqual(
+    groups.map((group) => ({
+      label: group.label,
+      items: group.items.map((item) => [item.label, item.value]),
+    })),
+    [
+      {
+        label: "Funding arrangement",
+        items: [["Arrangement", "Self-Funded"]],
+      },
+      {
+        label: "Plan design",
+        items: [
+          ["Individual deductible", "$2,300"],
+          ["Member coinsurance", "20%"],
+        ],
+      },
+      {
+        label: "Employer-funded HSA",
+        items: [["Family", "$1,500"]],
+      },
+    ]
+  );
 });
 
 test("employee contributions cannot exceed gross premium", () => {

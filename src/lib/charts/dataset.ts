@@ -1,4 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import {
+  BENEFIT_META,
+  policyDetailSummaryGroups,
+  type BenefitType,
+  type PolicyDetailSummaryGroup,
+  type PolicyPlanDetails,
+} from "@/lib/policy-details";
 
 async function loadCurrentPlanYear(planYearId: string) {
   const planYear = await prisma.planYear.findUniqueOrThrow({
@@ -66,6 +73,14 @@ export type ChartPolicyLine = LoadedPolicyLine & {
   enrollmentOverride?: number | null;
 };
 
+export type ChartPlanDesign = {
+  benefitType: BenefitType;
+  benefitLabel: string;
+  planName: string;
+  subtype: string;
+  groups: PolicyDetailSummaryGroup[];
+};
+
 type ChartPlanYearCore = Omit<CurrentPlanYear, "benefitPrograms" | "policyLines">;
 type ChartPriorPlanYear = Omit<
   NonNullable<PriorPlanYear>,
@@ -76,6 +91,7 @@ type ChartPriorPlanYear = Omit<
 
 export type ChartDataset = ChartPlanYearCore & {
   policyLines: ChartPolicyLine[];
+  planDesigns: ChartPlanDesign[];
   comparisonPlanYear?: ChartPriorPlanYear | null;
 };
 
@@ -87,6 +103,32 @@ export async function loadChartDataset(planYearId: string): Promise<ChartDataset
   );
   const { benefitPrograms, policyLines, ...planYearCore } = planYear;
   const currentLines = effectivePolicyLines(planYear.id, policyLines, benefitPrograms);
+  const planDesigns = benefitPrograms
+    .filter(
+      (program) =>
+        program.offered && program.benefitType !== "VoluntaryOfferings"
+    )
+    .flatMap((program) => {
+      const benefitType = program.benefitType as BenefitType;
+      return program.plans.flatMap((plan) => {
+        const groups = policyDetailSummaryGroups(
+          benefitType,
+          plan.subtype,
+          plan.details as PolicyPlanDetails
+        );
+        return groups.length > 0
+          ? [
+              {
+                benefitType,
+                benefitLabel: BENEFIT_META[benefitType].label,
+                planName: plan.name,
+                subtype: plan.subtype,
+                groups,
+              },
+            ]
+          : [];
+      });
+    });
   const normalizedPrior = comparisonPlanYear
     ? (() => {
         const { benefitPrograms: priorPrograms, policyLines: priorLines, ...priorCore } =
@@ -104,6 +146,7 @@ export async function loadChartDataset(planYearId: string): Promise<ChartDataset
   return {
     ...planYearCore,
     policyLines: currentLines,
+    planDesigns,
     comparisonPlanYear: normalizedPrior,
   };
 }
