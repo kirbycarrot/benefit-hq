@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readApiError } from "@/lib/api-response";
+import { readApiError, readJsonResponse } from "@/lib/api-response";
 
 type ManagedPlanYear = {
   id: string;
@@ -26,15 +26,25 @@ type DeleteTarget =
   | { kind: "client"; id: string; label: string }
   | { kind: "planYear"; id: string; label: string; clientName: string };
 
+type ImportResponse = {
+  error?: string;
+  id?: string;
+  warnings?: string[];
+};
+
 export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleClients = normalizedQuery
@@ -45,12 +55,36 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
       )
     : clients;
 
-  function showComingSoon(action: "import" | "export", clientName?: string) {
-    setNotice(
-      action === "import"
-        ? "Client import is staged in the interface. The package format and import logic will be added next."
-        : `${clientName ?? "Client"} export is staged in the interface. No file has been created yet.`
-    );
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportError(null);
+    setWarnings([]);
+    setNotice(null);
+
+    const formData = new FormData();
+    formData.set("file", file);
+
+    try {
+      const response = await fetch("/api/clients/import", { method: "POST", body: formData });
+      const data = await readJsonResponse<ImportResponse>(response);
+
+      if (!response.ok) {
+        setImportError(data?.error ?? "Unable to import this client");
+        return;
+      }
+
+      setNotice("Client imported successfully.");
+      setWarnings(data?.warnings ?? []);
+      router.refresh();
+    } catch {
+      setImportError("Unable to import this client. Please try again.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   function openDeleteDialog(nextTarget: DeleteTarget) {
@@ -103,14 +137,23 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
             Review every client and plan year from one administrative workspace. Permanent deletion removes all related data and stored files.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => showComingSoon("import")}
-          className="shrink-0 rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-black"
-        >
-          Import client
-          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[10px]">Coming soon</span>
-        </button>
+        <div className="shrink-0">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".benefithq"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <button
+            type="button"
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+            className="rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50"
+          >
+            {importing ? "Importing..." : "Import client"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -129,12 +172,32 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
         </p>
       </div>
 
+      {importError && (
+        <div role="alert" className="mt-4 flex items-start justify-between gap-4 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-destructive">
+          <span>{importError}</span>
+          <button type="button" onClick={() => setImportError(null)} className="shrink-0 text-xs font-semibold hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {notice && (
         <div role="status" className="mt-4 flex items-start justify-between gap-4 rounded-[12px] border border-border-light bg-panel-tint px-4 py-3 text-sm text-text-600">
           <span>{notice}</span>
           <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-xs font-semibold text-link hover:text-link-hover">
             Dismiss
           </button>
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="mt-4 rounded-[12px] border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-text-600">
+          <p className="font-semibold text-amber">Imported with warnings</p>
+          <ul className="mt-1.5 list-inside list-disc space-y-1 text-[13px]">
+            {warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -162,10 +225,12 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
                   <Link href={`/clients/${client.id}`} className="rounded-full border border-input-border px-3.5 py-2 text-xs font-semibold text-text-900 hover:border-text-300">
                     View client
                   </Link>
-                  <button type="button" onClick={() => showComingSoon("export", client.name)} className="rounded-full border border-input-border px-3.5 py-2 text-xs font-semibold text-text-900 hover:border-text-300">
+                  <a
+                    href={`/api/clients/${client.id}/export`}
+                    className="rounded-full border border-input-border px-3.5 py-2 text-xs font-semibold text-text-900 hover:border-text-300"
+                  >
                     Export client
-                    <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide text-text-400">Soon</span>
-                  </button>
+                  </a>
                   <button type="button" onClick={() => openDeleteDialog({ kind: "client", id: client.id, label: client.name })} className="rounded-full border border-red-200 px-3.5 py-2 text-xs font-semibold text-destructive hover:border-red-400">
                     Delete client
                   </button>
