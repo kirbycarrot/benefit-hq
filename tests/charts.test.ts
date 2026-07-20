@@ -52,6 +52,7 @@ function dataset(): ChartDataset {
       },
     ],
     planDesigns: [],
+    renewalTargets: { budgetTarget: null, maximumAcceptableIncrease: null },
   };
 }
 
@@ -528,6 +529,53 @@ test("renewal comparison pairs a unique plan rename without treating it as new s
   assert.equal(result.rows[0].status, "renamed");
   assert.equal(result.rows[0].priorPlan, "Legacy PPO");
   assert.equal(result.rows[0].currentPlan, "Renewal PPO");
+});
+
+test("renewal comparison has no guardrails when the client has no defined targets", () => {
+  const result = CHART_COMPUTE["renewal-comparison"](renewalDataset());
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.equal(result.guardrails, null);
+});
+
+test("renewal comparison flags a modeled increase above the client's stated tolerance", () => {
+  const ds = renewalDataset();
+  ds.renewalTargets = { budgetTarget: null, maximumAcceptableIncrease: 10 };
+
+  const result = CHART_COMPUTE["renewal-comparison"](ds);
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.deepEqual(result.guardrails, {
+    budgetTarget: null,
+    maximumAcceptableIncrease: 10,
+    overBudget: null,
+    overIncreaseTolerance: true,
+  });
+});
+
+test("renewal comparison marks the increase within target when it stays under the client's tolerance", () => {
+  const ds = renewalDataset();
+  ds.renewalTargets = { budgetTarget: null, maximumAcceptableIncrease: 30 };
+
+  const result = CHART_COMPUTE["renewal-comparison"](ds);
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.equal(result.guardrails?.overIncreaseTolerance, false);
+});
+
+test("renewal comparison flags a modeled cost above the client's defined budget target", () => {
+  const ds = renewalDataset();
+  ds.renewalTargets = { budgetTarget: 5000, maximumAcceptableIncrease: null };
+
+  const result = CHART_COMPUTE["renewal-comparison"](ds);
+  assert.equal(result.kind, "renewal");
+  if (result.kind !== "renewal" || !result.available) return;
+  assert.deepEqual(result.guardrails, {
+    budgetTarget: 5000,
+    maximumAcceptableIncrease: null,
+    overBudget: true,
+    overIncreaseTolerance: null,
+  });
 });
 
 test("workforce geography uses a state map when employees span states", () => {

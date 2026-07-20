@@ -3,12 +3,16 @@ import test from "node:test";
 import { persistCensus } from "@/lib/census/persist";
 import type { CensusNormalizeResult } from "@/lib/census/normalize";
 
-function censusResult(employeeNumbers: string[]): CensusNormalizeResult {
+function censusResult(
+  employeeNumbers: string[],
+  postalCodes: Record<string, string> = {}
+): CensusNormalizeResult {
   return {
     employees: employeeNumbers.map((employeeNumber) => ({
       employeeNumber,
       firstName: "Test",
       lastName: "Employee",
+      postalCode: postalCodes[employeeNumber],
       dependents: [],
       elections: [],
     })),
@@ -21,6 +25,38 @@ function censusResult(employeeNumbers: string[]): CensusNormalizeResult {
       matchedAncillaryCount: 0,
       unmatchedAncillaryCount: 0,
     },
+  };
+}
+
+function clientProfileTx(committed: { employees: string[]; uploads: string[] }, statesWithEmployees: string[]) {
+  const profile = { statesWithEmployees };
+  return {
+    $queryRaw: async () => [],
+    employee: {
+      deleteMany: async () => {
+        committed.employees = [];
+      },
+      create: async ({ data }: { data: { employeeNumber: string } }) => {
+        committed.employees.push(data.employeeNumber);
+      },
+    },
+    censusUpload: {
+      create: async ({ data }: { data: { filenames: string[] } }) => {
+        committed.uploads.push(...data.filenames);
+        return { id: "upload" };
+      },
+    },
+    planYear: {
+      findUnique: async () => ({ clientId: "client-1" }),
+    },
+    clientProfile: {
+      findUnique: async () => ({ statesWithEmployees: profile.statesWithEmployees }),
+      update: async ({ data }: { data: { statesWithEmployees: string[] } }) => {
+        profile.statesWithEmployees = data.statesWithEmployees;
+        return profile;
+      },
+    },
+    profile,
   };
 }
 
@@ -113,4 +149,48 @@ test("a successful census replacement commits data and history together", async 
     employees: ["new-1", "new-2"],
     uploads: ["existing.xlsx", "replacement.xlsx"],
   });
+});
+
+test("committing a census adds newly-seen employee states without dropping existing ones", async () => {
+  const committed = { employees: ["existing"], uploads: ["existing.xlsx"] };
+  let capturedTx: ReturnType<typeof clientProfileTx> | undefined;
+
+  const client = {
+    async $transaction(callback: (tx: unknown) => Promise<unknown>) {
+      const tx = clientProfileTx(committed, ["CO"]);
+      capturedTx = tx;
+      return callback(tx);
+    },
+  };
+
+  await persistCensus(
+    "plan-year",
+    censusResult(["ny-1"], { "ny-1": "10001" }),
+    { filenames: ["census.xlsx"] },
+    client as never
+  );
+
+  assert.deepEqual(capturedTx?.profile.statesWithEmployees, ["CO", "NY"]);
+});
+
+test("committing a census with no mappable ZIPs leaves the client's states untouched", async () => {
+  const committed = { employees: ["existing"], uploads: ["existing.xlsx"] };
+  let capturedTx: ReturnType<typeof clientProfileTx> | undefined;
+
+  const client = {
+    async $transaction(callback: (tx: unknown) => Promise<unknown>) {
+      const tx = clientProfileTx(committed, ["CO"]);
+      capturedTx = tx;
+      return callback(tx);
+    },
+  };
+
+  await persistCensus(
+    "plan-year",
+    censusResult(["no-zip"]),
+    { filenames: ["census.xlsx"] },
+    client as never
+  );
+
+  assert.deepEqual(capturedTx?.profile.statesWithEmployees, ["CO"]);
 });

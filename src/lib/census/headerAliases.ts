@@ -28,7 +28,8 @@ export type MedDenVisionField =
   | "benPlanName"
   | "benPlanOption"
   | "baseSalary"
-  | "postalCode";
+  | "postalCode"
+  | "state";
 
 export const MED_DEN_VISION_ALIASES: Record<MedDenVisionField, string[]> = {
   employeeNumber: ["employee number", "employee id", "emp id", "employee no"],
@@ -54,6 +55,7 @@ export const MED_DEN_VISION_ALIASES: Record<MedDenVisionField, string[]> = {
   benPlanOption: ["ben plan option name", "plan option", "option name"],
   baseSalary: ["base salary", "salary"],
   postalCode: ["primary address postal code", "postal code", "zip", "zip code"],
+  state: ["primary address state", "state", "state province", "employee state"],
 };
 
 export const MED_DEN_VISION_REQUIRED: MedDenVisionField[] = [

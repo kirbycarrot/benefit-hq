@@ -2,6 +2,18 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { acquireAdvisoryTransactionLock } from "@/lib/advisory-lock";
 import type { CensusNormalizeResult } from "./normalize";
+import { zipToState } from "./zipToState";
+import { US_STATES } from "@/lib/client-onboarding";
+
+const VALID_STATE_CODES = new Set<string>(US_STATES.map(([code]) => code));
+
+function resolveEmployeeState(
+  employee: CensusNormalizeResult["employees"][number]
+): string | undefined {
+  const explicit = employee.state?.trim().toUpperCase();
+  if (explicit && VALID_STATE_CODES.has(explicit)) return explicit;
+  return zipToState(employee.postalCode);
+}
 
 export type CensusUploadMetadata = {
   filenames: string[];
@@ -58,6 +70,8 @@ async function replaceCensus(
     });
   }
 
+  await syncStatesWithEmployees(tx, planYearId, result.employees);
+
   return tx.censusUpload.create({
     data: {
       planYearId,
@@ -66,6 +80,45 @@ async function replaceCensus(
       warnings: result.warnings,
       summary: result.summary,
     },
+  });
+}
+
+// Infers states from employee ZIP codes and folds any newly-seen states into
+// the client's profile. Existing entries (including ones added manually for
+// states with no census-eligible employees yet) are never removed here.
+async function syncStatesWithEmployees(
+  tx: Prisma.TransactionClient,
+  planYearId: string,
+  employees: CensusNormalizeResult["employees"]
+) {
+  const derivedStates = new Set(
+    employees
+      .map((employee) => resolveEmployeeState(employee))
+      .filter((state): state is string => Boolean(state))
+  );
+  if (derivedStates.size === 0) return;
+
+  const planYear = await tx.planYear.findUnique({
+    where: { id: planYearId },
+    select: { clientId: true },
+  });
+  if (!planYear) return;
+
+  const profile = await tx.clientProfile.findUnique({
+    where: { clientId: planYear.clientId },
+    select: { statesWithEmployees: true },
+  });
+  if (!profile) return;
+
+  const existingStates = Array.isArray(profile.statesWithEmployees)
+    ? (profile.statesWithEmployees as string[])
+    : [];
+  const merged = Array.from(new Set([...existingStates, ...derivedStates]));
+  if (merged.length === existingStates.length) return;
+
+  await tx.clientProfile.update({
+    where: { clientId: planYear.clientId },
+    data: { statesWithEmployees: merged },
   });
 }
 

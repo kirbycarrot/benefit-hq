@@ -50,6 +50,53 @@ test("recommendations are prioritized and derived from material exceptions", () 
   assert.match(recommendations[0].detail, /6 elections are unmatched/);
 });
 
+test("a renewal exceeding the client's stated guardrails surfaces an immediate-attention recommendation", () => {
+  const renewal = {
+    kind: "renewal",
+    available: true,
+    title: "Renewal Comparison",
+    priorLabel: "2026",
+    currentLabel: "2027",
+    priorEffectiveDate: new Date("2026-01-01T00:00:00Z"),
+    currentEffectiveDate: new Date("2027-01-01T00:00:00Z"),
+    summary: {
+      priorAnnualEmployerCost: 3600,
+      currentAnnualEmployerCost: 4500,
+      employerChange: 900,
+      employerChangePercentage: 25,
+      priorAnnualEmployeeCost: 1200,
+      currentAnnualEmployeeCost: 1500,
+      employeeChange: 300,
+      employeeChangePercentage: 25,
+      priorAnnualTotalCost: 4800,
+      currentAnnualTotalCost: 6000,
+      totalChange: 1200,
+      totalChangePercentage: 25,
+    },
+    rows: [],
+    comparableRows: 1,
+    renamedRows: 0,
+    newRows: 0,
+    removedRows: 0,
+    guardrails: {
+      budgetTarget: 5000,
+      maximumAcceptableIncrease: 10,
+      overBudget: true,
+      overIncreaseTolerance: true,
+    },
+    note: "Test note",
+  } satisfies Extract<ChartResult, { kind: "renewal"; available: true }>;
+
+  const recommendations = buildDeckRecommendations([renewal]);
+  const titles = recommendations.map((r) => r.title);
+  assert.ok(titles.includes("Renewal exceeds the client's stated increase tolerance"));
+  assert.ok(titles.includes("Renewal exceeds the client's defined budget target"));
+  assert.ok(
+    recommendations.find((r) => r.title.startsWith("Renewal exceeds"))?.priority ===
+      "Immediate attention"
+  );
+});
+
 test("section copy provides an audience-facing transition", () => {
   assert.deepEqual(sectionNarrative("renewal & cost"), {
     title: "Renewal and cost",

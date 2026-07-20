@@ -245,6 +245,20 @@ export function buildDeckRecommendations(results: ChartResult[]): DeckRecommenda
       detail: `At current enrollment, estimated annual premium increases by ${compactCurrency(renewal.summary.totalChange)}${renewal.summary.totalChangePercentage === null ? "" : ` (${percent(renewal.summary.totalChangePercentage)})`}.`,
     });
   }
+  if (renewal?.guardrails?.overIncreaseTolerance) {
+    add({
+      priority: "Immediate attention",
+      title: "Renewal exceeds the client's stated increase tolerance",
+      detail: `Modeled increase of ${percent(renewal.summary.totalChangePercentage ?? 0)} is above the client's maximum acceptable increase of ${renewal.guardrails.maximumAcceptableIncrease}%.`,
+    });
+  }
+  if (renewal?.guardrails?.overBudget) {
+    add({
+      priority: "Immediate attention",
+      title: "Renewal exceeds the client's defined budget target",
+      detail: `Modeled annual cost of ${compactCurrency(renewal.summary.currentAnnualTotalCost)} is above the client's defined budget target of ${compactCurrency(renewal.guardrails.budgetTarget ?? 0)}.`,
+    });
+  }
 
   const contribution = results.find(
     (result): result is Extract<ChartResult, { kind: "contribution" }> =>

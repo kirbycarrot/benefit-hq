@@ -26,6 +26,13 @@ async function loadCurrentPlanYear(planYearId: string) {
           },
         },
       },
+      client: {
+        select: {
+          profile: {
+            select: { budgetTarget: true, maximumAcceptableIncrease: true },
+          },
+        },
+      },
     },
   });
 
@@ -81,7 +88,10 @@ export type ChartPlanDesign = {
   groups: PolicyDetailSummaryGroup[];
 };
 
-type ChartPlanYearCore = Omit<CurrentPlanYear, "benefitPrograms" | "policyLines">;
+type ChartPlanYearCore = Omit<
+  CurrentPlanYear,
+  "benefitPrograms" | "policyLines" | "client"
+>;
 type ChartPriorPlanYear = Omit<
   NonNullable<PriorPlanYear>,
   "benefitPrograms" | "policyLines"
@@ -89,10 +99,16 @@ type ChartPriorPlanYear = Omit<
   policyLines: ChartPolicyLine[];
 };
 
+export type ChartRenewalTargets = {
+  budgetTarget: number | null;
+  maximumAcceptableIncrease: number | null;
+};
+
 export type ChartDataset = ChartPlanYearCore & {
   policyLines: ChartPolicyLine[];
   planDesigns: ChartPlanDesign[];
   comparisonPlanYear?: ChartPriorPlanYear | null;
+  renewalTargets: ChartRenewalTargets;
 };
 
 export async function loadChartDataset(planYearId: string): Promise<ChartDataset> {
@@ -101,7 +117,11 @@ export async function loadChartDataset(planYearId: string): Promise<ChartDataset
     planYear.clientId,
     planYear.effectiveDate
   );
-  const { benefitPrograms, policyLines, ...planYearCore } = planYear;
+  const { benefitPrograms, policyLines, client, ...planYearCore } = planYear;
+  const renewalTargets: ChartRenewalTargets = {
+    budgetTarget: client.profile?.budgetTarget?.toNumber() ?? null,
+    maximumAcceptableIncrease: client.profile?.maximumAcceptableIncrease?.toNumber() ?? null,
+  };
   const currentLines = effectivePolicyLines(planYear.id, policyLines, benefitPrograms);
   const planDesigns = benefitPrograms
     .filter(
@@ -148,6 +168,7 @@ export async function loadChartDataset(planYearId: string): Promise<ChartDataset
     policyLines: currentLines,
     planDesigns,
     comparisonPlanYear: normalizedPrior,
+    renewalTargets,
   };
 }
 

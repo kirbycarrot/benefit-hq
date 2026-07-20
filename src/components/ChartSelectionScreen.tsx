@@ -24,6 +24,8 @@ import {
   type ChartSelection,
 } from "@/lib/charts/viewOptions";
 import {
+  combineContributionRowsByPlan,
+  combineRenewalRowsByPlan,
   contributionBarResult,
   geographyBarResult,
   geographyTableResult,
@@ -525,7 +527,7 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-lighter">
-                {result.rows.map((row, index) => (
+                {combineContributionRowsByPlan(result.rows).map((row, index) => (
                   <tr key={`${row.benefit}-${row.plan}-${row.tier}-${index}`}>
                     <td className="px-3 py-2.5">
                       <p className="font-semibold text-text-900">{row.benefit}</p>
@@ -685,6 +687,41 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
           ))}
         </div>
 
+        {result.guardrails && (
+          <div className="flex flex-wrap gap-x-6 gap-y-1.5 border-t border-border-lighter bg-panel-tint px-4 py-2.5 text-[11px]">
+            {result.guardrails.maximumAcceptableIncrease !== null && (
+              <p className="font-semibold">
+                <span className="text-text-600">Client&apos;s maximum acceptable increase: </span>
+                <span className="text-text-900">
+                  {result.guardrails.maximumAcceptableIncrease.toFixed(1)}%
+                </span>
+                {result.guardrails.overIncreaseTolerance !== null && (
+                  <span
+                    className={result.guardrails.overIncreaseTolerance ? "text-amber" : "text-teal-deep"}
+                  >
+                    {" "}
+                    · {result.guardrails.overIncreaseTolerance ? "over target" : "within target"}
+                  </span>
+                )}
+              </p>
+            )}
+            {result.guardrails.budgetTarget !== null && (
+              <p className="font-semibold">
+                <span className="text-text-600">Defined budget target: </span>
+                <span className="text-text-900">
+                  {formatCompactCurrency(result.guardrails.budgetTarget)}
+                </span>
+                {result.guardrails.overBudget !== null && (
+                  <span className={result.guardrails.overBudget ? "text-amber" : "text-teal-deep"}>
+                    {" "}
+                    · {result.guardrails.overBudget ? "over budget" : "within budget"}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="min-w-[980px] divide-y divide-border-lighter text-xs">
             <thead>
@@ -708,7 +745,7 @@ function ChartPreview({ result, view }: { result: ChartResult; view?: string }) 
               </tr>
             </thead>
             <tbody className="divide-y divide-border-lighter">
-              {result.rows.map((row, index) => {
+              {combineRenewalRowsByPlan(result.rows).map((row, index) => {
                 const employeeRates =
                   row.priorEmployeeRate === null || row.currentEmployeeRate === null
                     ? row.status === "new"

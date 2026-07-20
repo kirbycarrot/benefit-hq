@@ -34,6 +34,7 @@ export type NormalizedEmployee = {
   employmentStatus?: string;
   baseSalary?: number;
   postalCode?: string;
+  state?: string;
   dependents: NormalizedDependent[];
   elections: NormalizedElection[];
 };
@@ -192,6 +193,7 @@ export function normalizeCensus(sheets: ParsedSheet[]): CensusNormalizeResult {
         employmentStatus: toStr(getCell(row, medColMap, "employmentStatus")),
         baseSalary: toNumber(getCell(row, medColMap, "baseSalary")),
         postalCode: toStr(getCell(row, medColMap, "postalCode")),
+        state: toStr(getCell(row, medColMap, "state")),
         dependents: [],
         elections: [],
         dependentKeys: new Set(),
@@ -311,6 +313,7 @@ export function normalizeCensus(sheets: ParsedSheet[]): CensusNormalizeResult {
       employmentStatus: accumulator.employmentStatus,
       baseSalary: accumulator.baseSalary,
       postalCode: accumulator.postalCode,
+      state: accumulator.state,
       dependents: accumulator.dependents,
       elections: accumulator.elections,
     })

@@ -36,6 +36,8 @@ import {
   type ChartSelection,
 } from "@/lib/charts/viewOptions";
 import {
+  combineContributionRowsByPlan,
+  combineRenewalRowsByPlan,
   contributionBarResult,
   geographyBarResult,
   geographyTableResult,
@@ -736,8 +738,9 @@ export function addContributionStrategySlides(
 ) {
   const primaryColor = stripHash(primary);
   const secondaryColor = stripHash(secondary);
-  const firstPageRows = result.rows.slice(0, 7);
-  const remainingRows = result.rows.slice(7);
+  const combinedRows = combineContributionRowsByPlan(result.rows);
+  const firstPageRows = combinedRows.slice(0, 7);
+  const remainingRows = combinedRows.slice(7);
   const pages = [
     { rows: firstPageRows, first: true },
     ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
@@ -1542,8 +1545,9 @@ export function addRenewalComparisonSlides(
 ) {
   const primaryColor = stripHash(primary);
   const warningColor = "D97706";
-  const firstPageRows = result.rows.slice(0, 6);
-  const remainingRows = result.rows.slice(6);
+  const combinedRows = combineRenewalRowsByPlan(result.rows);
+  const firstPageRows = combinedRows.slice(0, 6);
+  const remainingRows = combinedRows.slice(6);
   const pages = [
     { rows: firstPageRows, first: true },
     ...Array.from({ length: Math.ceil(remainingRows.length / 10) }, (_, index) => ({
@@ -1750,6 +1754,38 @@ export function addRenewalComparisonSlides(
         });
       });
       tableY = 2.45;
+
+      if (result.guardrails) {
+        const guardrailParts: { text: string; color: string }[] = [];
+        if (result.guardrails.maximumAcceptableIncrease !== null) {
+          guardrailParts.push({
+            text: `Client's maximum acceptable increase: ${result.guardrails.maximumAcceptableIncrease.toFixed(1)}%${result.guardrails.overIncreaseTolerance === null ? "" : result.guardrails.overIncreaseTolerance ? " · over target" : " · within target"}`,
+            color:
+              result.guardrails.overIncreaseTolerance === true ? warningColor : primaryColor,
+          });
+        }
+        if (result.guardrails.budgetTarget !== null) {
+          guardrailParts.push({
+            text: `Defined budget target: ${compactCurrency(result.guardrails.budgetTarget)}${result.guardrails.overBudget === null ? "" : result.guardrails.overBudget ? " · over budget" : " · within budget"}`,
+            color: result.guardrails.overBudget === true ? warningColor : primaryColor,
+          });
+        }
+        const partW = (SLIDE_W - margin * 2) / guardrailParts.length;
+        guardrailParts.forEach((part, index) => {
+          slide.addText(part.text, {
+            x: margin + index * partW,
+            y: 2.24,
+            w: partW,
+            h: 0.18,
+            fontSize: 8.5,
+            bold: true,
+            color: part.color,
+            margin: 0,
+            fit: "shrink",
+          });
+        });
+        tableY = 2.48;
+      }
     }
 
     if (page.rows.length) {

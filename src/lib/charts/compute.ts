@@ -1278,6 +1278,20 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
   const newRows = rows.filter((row) => row.status === "new").length;
   const removedRows = rows.filter((row) => row.status === "removed").length;
   const renamedRows = rows.filter((row) => row.status === "renamed").length;
+  const totalChangePercentage = percentageChange(currentAnnualTotalCost, priorAnnualTotalCost);
+  const { budgetTarget, maximumAcceptableIncrease } = ds.renewalTargets;
+  const guardrails =
+    budgetTarget === null && maximumAcceptableIncrease === null
+      ? null
+      : {
+          budgetTarget,
+          maximumAcceptableIncrease,
+          overBudget: budgetTarget === null ? null : currentAnnualTotalCost > budgetTarget,
+          overIncreaseTolerance:
+            maximumAcceptableIncrease === null || totalChangePercentage === null
+              ? null
+              : totalChangePercentage > maximumAcceptableIncrease,
+        };
 
   return {
     kind: "renewal",
@@ -1305,16 +1319,14 @@ function computeRenewalComparison(ds: ChartDataset): ChartResult {
       priorAnnualTotalCost,
       currentAnnualTotalCost,
       totalChange: currentAnnualTotalCost - priorAnnualTotalCost,
-      totalChangePercentage: percentageChange(
-        currentAnnualTotalCost,
-        priorAnnualTotalCost
-      ),
+      totalChangePercentage,
     },
     rows,
     comparableRows: comparable.length,
     renamedRows,
     newRows,
     removedRows,
+    guardrails,
     note: `Annual impact applies ${ds.label} enrollment to both rate sets for comparable rows, isolating rate changes from headcount changes.${newRows || removedRows ? ` ${newRows} new and ${removedRows} removed rate row${newRows + removedRows === 1 ? " is" : "s are"} excluded from the impact totals until uniquely matched.` : ""}${renamedRows ? ` ${renamedRows} uniquely paired row${renamedRows === 1 ? " was" : "s were"} treated as a plan rename.` : ""}`,
   };
 }

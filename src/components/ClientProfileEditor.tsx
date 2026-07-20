@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readApiError } from "@/lib/api-response";
+import { readApiError, readJsonResponse } from "@/lib/api-response";
 import {
   CLIENT_CONTACT_ROLES,
   CLIENT_DOCUMENT_CATEGORIES,
@@ -378,7 +378,78 @@ function OrganizationSection({ data, update }: { data: EditorData; update: (upda
 }
 
 function LocationCard({ location, onChange, onRemove }: { location: EditorLocation; onChange: (location: EditorLocation) => void; onRemove: () => void }) {
-  return <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-4"><div className="flex items-start justify-between gap-3"><div className="grid flex-1 gap-3 sm:grid-cols-2"><TextField label="Location name" value={location.name} onChange={(value) => onChange({ ...location, name: value })} /><label className="flex h-11 items-center gap-2 self-end text-xs font-semibold text-text-600"><input type="checkbox" checked={location.isHeadquarters} onChange={(event) => onChange({ ...location, isHeadquarters: event.target.checked })} className="h-4 w-4 accent-teal-deep" />Headquarters</label><div className="sm:col-span-2"><TextField label="Street address" value={location.line1} onChange={(value) => onChange({ ...location, line1: value })} /></div><div className="sm:col-span-2"><TextField label="Suite or unit" value={location.line2 ?? ""} onChange={(value) => onChange({ ...location, line2: nullable(value) })} /></div><TextField label="City" value={location.city} onChange={(value) => onChange({ ...location, city: value })} /><SelectField label="State" value={location.state} options={US_STATES.map(([code]) => code)} onChange={(value) => onChange({ ...location, state: value })} /><TextField label="ZIP code" value={location.postalCode} onChange={(value) => onChange({ ...location, postalCode: value })} /><NumberField label="Approximate employees" value={location.employeeCount} onChange={(value) => onChange({ ...location, employeeCount: value })} /></div><button type="button" onClick={onRemove} className="text-xs font-semibold text-destructive">Remove</button></div></div>;
+  return <div className="rounded-[12px] border border-border-lighter bg-panel-tint p-4"><div className="flex items-start justify-between gap-3"><div className="grid flex-1 gap-3 sm:grid-cols-2"><TextField label="Location name" value={location.name} onChange={(value) => onChange({ ...location, name: value })} /><label className="flex h-11 items-center gap-2 self-end text-xs font-semibold text-text-600"><input type="checkbox" checked={location.isHeadquarters} onChange={(event) => onChange({ ...location, isHeadquarters: event.target.checked })} className="h-4 w-4 accent-teal-deep" />Headquarters</label><div className="sm:col-span-2"><AddressAutocompleteField location={location} onChange={onChange} /></div><div className="sm:col-span-2"><TextField label="Suite or unit" value={location.line2 ?? ""} onChange={(value) => onChange({ ...location, line2: nullable(value) })} /></div><TextField label="City" value={location.city} onChange={(value) => onChange({ ...location, city: value })} /><SelectField label="State" value={location.state} options={US_STATES.map(([code]) => code)} onChange={(value) => onChange({ ...location, state: value })} /><TextField label="ZIP code" value={location.postalCode} onChange={(value) => onChange({ ...location, postalCode: value })} /><NumberField label="Approximate employees" value={location.employeeCount} onChange={(value) => onChange({ ...location, employeeCount: value })} /></div><button type="button" onClick={onRemove} className="text-xs font-semibold text-destructive">Remove</button></div></div>;
+}
+
+type AddressSuggestion = { id: string; label: string; line1: string; city: string; state: string; postalCode: string };
+
+function AddressAutocompleteField({ location, onChange }: { location: EditorLocation; onChange: (location: EditorLocation) => void }) {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleInput(value: string) {
+    onChange({ ...location, line1: value });
+    setOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const data = await readJsonResponse<{ suggestions: AddressSuggestion[] }>(res);
+        setSuggestions(data?.suggestions ?? []);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 300);
+  }
+
+  function selectSuggestion(suggestion: AddressSuggestion) {
+    onChange({
+      ...location,
+      line1: suggestion.line1,
+      city: suggestion.city,
+      state: suggestion.state,
+      postalCode: suggestion.postalCode,
+    });
+    setSuggestions([]);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <label className={labelClass}>Street address</label>
+      <input
+        value={location.line1}
+        onChange={(event) => handleInput(event.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        autoComplete="off"
+        className={inputClass}
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-[10px] border border-input-border bg-white text-[13px] shadow-lg">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.id}>
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  selectSuggestion(suggestion);
+                }}
+                className="block w-full px-3 py-2 text-left text-text-900 hover:bg-panel-tint"
+              >
+                {suggestion.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function EntityCard({ entity, onChange, onRemove }: { entity: EditorEntity; onChange: (entity: EditorEntity) => void; onRemove: () => void }) {

@@ -1,24 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { PolicyDetailsEditor } from "@/components/PolicyDetailsEditor";
 import { CensusUploader } from "@/components/CensusUploader";
 import { SbcUploader } from "@/components/SbcUploader";
 import { formatDate } from "@/lib/date";
-import type { SbcExtractedFields } from "@/lib/sbc/parse";
 import {
   BENEFIT_TYPES,
-  CENSUS_ELECTION_BENEFIT_TYPE,
-  inferPlanSubtype,
-  normalizePolicyName,
-  policyTierFromCensusOption,
-  type AncillaryVolumeBenefitType,
+  policyReadinessIssues,
   type BenefitType,
-  type CensusPlanSuggestion,
   type CustomPlanAttribute,
   type PolicyPlanDetails,
   type PolicyProgramInput,
-  type RateBenefitType,
 } from "@/lib/policy-details";
 
 export default async function PlanYearDetailPage({
@@ -53,69 +45,6 @@ export default async function PlanYearDetailPage({
   if (!planYear || planYear.clientId !== clientId) notFound();
 
   const latestUpload = planYear.censusUploads[0];
-  const [electionGroups, priorWithPrograms, carriers, volumeGroups, sbcDocuments] = await Promise.all([
-    prisma.benefitElection.groupBy({
-      by: ["benefitType", "planName", "optionName"],
-      where: {
-        employee: { planYearId },
-        benefitType: { in: ["Medical", "Dental", "Vision"] },
-        planName: { not: null },
-      },
-      _count: { _all: true },
-    }),
-    planYear.benefitPrograms.length === 0
-      ? prisma.planYear.findFirst({
-          where: {
-            clientId,
-            effectiveDate: { lt: planYear.effectiveDate },
-            benefitPrograms: { some: {} },
-          },
-          orderBy: { effectiveDate: "desc" },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
-    prisma.carrier.findMany({ orderBy: { name: "asc" } }),
-    prisma.benefitElection.groupBy({
-      by: ["benefitType"],
-      where: {
-        employee: { planYearId },
-        benefitType: { in: Object.values(CENSUS_ELECTION_BENEFIT_TYPE) },
-        volume: { not: null },
-      },
-      _sum: { volume: true },
-    }),
-    prisma.clientDocument.findMany({
-      where: { planYearId, category: "sbc" },
-      orderBy: { uploadedAt: "desc" },
-      take: 10,
-      select: { id: true, originalFilename: true, uploadedAt: true, extractedFields: true },
-    }),
-  ]);
-  const carriersByBenefitType = carriers.reduce<Record<string, string[]>>((acc, carrier) => {
-    (acc[carrier.benefitType] ??= []).push(carrier.name);
-    return acc;
-  }, {});
-
-  const censusBenefitTypeToPolicy = Object.fromEntries(
-    Object.entries(CENSUS_ELECTION_BENEFIT_TYPE).map(([policyType, censusType]) => [censusType, policyType])
-  ) as Record<string, AncillaryVolumeBenefitType>;
-  const censusVolumeByBenefitType = volumeGroups.reduce<Partial<Record<BenefitType, number>>>(
-    (acc, group) => {
-      const policyType = censusBenefitTypeToPolicy[group.benefitType];
-      if (policyType && group._sum.volume) acc[policyType] = group._sum.volume.toNumber();
-      return acc;
-    },
-    {}
-  );
-
-  const pendingSbcExtractions = sbcDocuments
-    .filter((doc): doc is typeof doc & { extractedFields: object } => Boolean(doc.extractedFields))
-    .map((doc) => ({
-      id: doc.id,
-      filename: doc.originalFilename,
-      uploadedAt: doc.uploadedAt.toISOString(),
-      fields: doc.extractedFields as unknown as SbcExtractedFields,
-    }));
 
   const initialPrograms: PolicyProgramInput[] = planYear.benefitPrograms
     .filter((program) => isBenefitType(program.benefitType))
@@ -144,16 +73,20 @@ export default async function PlanYearDetailPage({
         })),
       })),
     }));
-  const censusSuggestions = buildCensusSuggestions(electionGroups);
-  const policyEditorVersion = planYear.benefitPrograms
-    .flatMap((program) => [
-      program.updatedAt.getTime(),
-      ...program.plans.flatMap((plan) => [
-        plan.updatedAt.getTime(),
-        ...plan.rates.map((rate) => rate.updatedAt.getTime()),
-      ]),
-    ])
-    .join(":");
+
+  const offeredCount = initialPrograms.filter((program) => program.offered).length;
+  const issues = policyReadinessIssues(initialPrograms);
+  const errorCount = issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+  const readinessSummary =
+    issues.length === 0
+      ? "Ready for reporting"
+      : [
+          errorCount > 0 ? `${errorCount} item${errorCount === 1 ? "" : "s"} need attention` : null,
+          warningCount > 0 ? `${warningCount} warning${warningCount === 1 ? "" : "s"}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
 
   return (
     <div>
@@ -198,19 +131,23 @@ export default async function PlanYearDetailPage({
       <div id="policy-details" className="mt-10 scroll-mt-8">
         <h2 className="mb-1 text-[19px] font-extrabold text-text-900">Policy details</h2>
         <p className="mb-[18px] max-w-[760px] text-sm text-text-600">
-          Build only the benefits this client offers. Start from census elections, an uploaded SBC, or a
-          prior plan year, then expand each plan for rates and policy provisions as needed.
+          Build only the benefits this client offers, using census elections, an uploaded SBC, or a
+          prior plan year to get started.
         </p>
-        <PolicyDetailsEditor
-          key={policyEditorVersion || "empty"}
-          planYearId={planYear.id}
-          initialPrograms={initialPrograms}
-          censusSuggestions={censusSuggestions}
-          canCopyPrior={Boolean(priorWithPrograms)}
-          carriersByBenefitType={carriersByBenefitType}
-          censusVolumeByBenefitType={censusVolumeByBenefitType}
-          pendingSbcExtractions={pendingSbcExtractions}
-        />
+        <div className="flex flex-col gap-4 rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div>
+            <p className="text-sm font-bold text-text-900">
+              {offeredCount} of {BENEFIT_TYPES.length} benefit types configured
+            </p>
+            <p className="mt-1 text-xs text-text-600">{readinessSummary}</p>
+          </div>
+          <Link
+            href={`/clients/${clientId}/plan-years/${planYearId}/policy-details`}
+            className="shrink-0 rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black"
+          >
+            Open policy details
+          </Link>
+        </div>
       </div>
 
       <div className="mt-10">
@@ -218,21 +155,23 @@ export default async function PlanYearDetailPage({
         <p className="mb-[18px] text-sm text-text-600">
           Choose which charts and tables to include, then generate the branded deck.
         </p>
-        <Link
-          href={`/clients/${clientId}/plan-years/${planYearId}/charts`}
-          className="inline-block rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black"
-        >
-          Choose charts &amp; tables
-        </Link>
-        <p className="mt-3 text-xs text-text-400">
-          Mercer context is applied automatically when a matching company metric is available.{" "}
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-[26px]">
           <Link
-            href={`/clients/${clientId}/plan-years/${planYearId}/benchmarking`}
-            className="font-semibold text-text-600 underline decoration-border-light underline-offset-2 hover:text-text-900"
+            href={`/clients/${clientId}/plan-years/${planYearId}/charts`}
+            className="inline-block rounded-full bg-ink-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black"
           >
-            Advanced benchmark QA
+            Choose charts &amp; tables
           </Link>
-        </p>
+          <p className="text-xs text-text-400">
+            Mercer context is applied automatically when a matching company metric is available.{" "}
+            <Link
+              href={`/clients/${clientId}/plan-years/${planYearId}/benchmarking`}
+              className="font-semibold text-text-600 underline decoration-border-light underline-offset-2 hover:text-text-900"
+            >
+              Advanced benchmark QA
+            </Link>
+          </p>
+        </div>
 
         {planYear.decks.length > 0 && (
           <div className="mt-6">
@@ -294,43 +233,4 @@ function customPlanAttributes(value: unknown): CustomPlanAttribute[] {
       typeof (item as { label?: unknown }).label === "string" &&
       typeof (item as { value?: unknown }).value === "string"
   );
-}
-
-function buildCensusSuggestions(
-  groups: Array<{
-    benefitType: string;
-    planName: string | null;
-    optionName: string | null;
-    _count: { _all: number };
-  }>
-): CensusPlanSuggestion[] {
-  const suggestions = new Map<string, CensusPlanSuggestion>();
-
-  for (const group of groups) {
-    if (!group.planName || !isRateBenefit(group.benefitType)) continue;
-    if (/waive|declin|no coverage|not enrolled/i.test(`${group.planName} ${group.optionName ?? ""}`)) {
-      continue;
-    }
-    const key = `${group.benefitType}:${normalizePolicyName(group.planName)}`;
-    const suggestion = suggestions.get(key) ?? {
-      benefitType: group.benefitType,
-      planName: group.planName.trim(),
-      subtype: inferPlanSubtype(group.benefitType, group.planName),
-      tierEnrollments: {},
-    };
-    const tier = policyTierFromCensusOption(group.optionName);
-    suggestion.tierEnrollments[tier] =
-      (suggestion.tierEnrollments[tier] ?? 0) + group._count._all;
-    suggestions.set(key, suggestion);
-  }
-
-  return [...suggestions.values()].sort(
-    (left, right) =>
-      BENEFIT_TYPES.indexOf(left.benefitType) - BENEFIT_TYPES.indexOf(right.benefitType) ||
-      left.planName.localeCompare(right.planName)
-  );
-}
-
-function isRateBenefit(value: string): value is RateBenefitType {
-  return value === "Medical" || value === "Dental" || value === "Vision";
 }

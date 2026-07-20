@@ -220,6 +220,12 @@ export type ChartResult =
       renamedRows: number;
       newRows: number;
       removedRows: number;
+      guardrails: {
+        budgetTarget: number | null;
+        maximumAcceptableIncrease: number | null;
+        overBudget: boolean | null;
+        overIncreaseTolerance: boolean | null;
+      } | null;
       note: string;
     }
   | { kind: "stats"; title: string; stats: { label: string; value: string }[] }
