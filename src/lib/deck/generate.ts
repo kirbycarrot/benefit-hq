@@ -2123,7 +2123,7 @@ function planDesignTopic(
   plan: Extract<ChartResult, { kind: "plan-design" }>['plans'][number]
 ): string {
   if (plan.benefitType === "VoluntaryLife") return `Voluntary life · ${plan.subtype}`;
-  if (plan.benefitType === "BasicLife") return "Basic life provisions";
+  if (plan.benefitType === "BasicLife") return "Employer paid life provisions";
   if (plan.benefitType === "STD") return "Short-term disability provisions";
   if (plan.benefitType === "LTD") return "Long-term disability provisions";
   return `${plan.benefitLabel} plan design · ${plan.subtype}`;

@@ -165,6 +165,7 @@ const profileSchema = z.object({
   entityStructure: nullableText(100),
   numberOfEins: z.number().int().min(1).max(10_000).nullable(),
   benefitsConsistentAcrossEntities: nullableBoolean,
+  benefitsConsistencyNotes: nullableText(2_000),
   hasUnionPopulation: nullableBoolean,
   hasCollectivelyBargainedPlans: nullableBoolean,
   hasAcquiredCompanies: nullableBoolean,

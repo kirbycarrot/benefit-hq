@@ -20,7 +20,7 @@ function onboarding(): ClientOnboardingInput {
       fiscalYearEndDay: 31, primaryRenewalMonth: 1, primaryRenewalDay: 1,
       usEmployeeCount: 100, globalEmployeeCount: 100, benefitsEligibleCount: 90,
       enrolledEmployeeCount: 80, entityStructure: "Single Entity", numberOfEins: 1,
-      benefitsConsistentAcrossEntities: true, hasUnionPopulation: false,
+      benefitsConsistentAcrossEntities: true, benefitsConsistencyNotes: null, hasUnionPopulation: false,
       hasCollectivelyBargainedPlans: false, hasAcquiredCompanies: false,
       hasInternationalEmployees: false, workforceTypes: ["None of These"],
       coveredThroughPeo: false, statesWithEmployees: ["CO"], remoteEmployeePercentage: 20,

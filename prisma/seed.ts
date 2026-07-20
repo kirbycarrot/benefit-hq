@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { CHART_DEFINITIONS } from "../src/lib/charts/catalog";
 import mercer2025 from "./data/mercer-2025.json";
+import { PLACEHOLDER_CARRIERS } from "./data/placeholder-carriers";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -29,7 +30,23 @@ async function main() {
   }
   console.log(`Seeded ${CHART_DEFINITIONS.length} chart definitions.`);
 
+  await seedPlaceholderCarriers();
   await seedMercerBenchmark();
+}
+
+async function seedPlaceholderCarriers() {
+  let count = 0;
+  for (const [benefitType, names] of Object.entries(PLACEHOLDER_CARRIERS)) {
+    for (const name of names) {
+      await prisma.carrier.upsert({
+        where: { benefitType_name: { benefitType, name } },
+        update: {},
+        create: { benefitType, name },
+      });
+      count++;
+    }
+  }
+  console.log(`Seeded ${count} placeholder carriers.`);
 }
 
 async function seedMercerBenchmark() {

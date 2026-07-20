@@ -27,6 +27,7 @@ import {
   normalizePolicyName,
   policyReadinessIssues,
   selectedVoluntaryPlanOfferings,
+  subtypeDisplayLabel,
   visibleDetailGroups,
 } from "@/lib/policy-details";
 import { RATE_PERIOD_LABELS, RATE_PERIODS } from "@/lib/validation";
@@ -44,11 +45,13 @@ export function PolicyDetailsEditor({
   initialPrograms,
   censusSuggestions,
   canCopyPrior,
+  carriersByBenefitType,
 }: {
   planYearId: string;
   initialPrograms: PolicyProgramInput[];
   censusSuggestions: CensusPlanSuggestion[];
   canCopyPrior: boolean;
+  carriersByBenefitType: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [programs, setPrograms] = useState<EditorProgram[]>(() =>
@@ -107,10 +110,11 @@ export function PolicyDetailsEditor({
       const defaultName =
         benefitType === "VoluntaryLife"
           ? selectedSubtype
-          : `${selectedSubtype} ${sameTypeCount + 1}`;
+          : `${subtypeDisplayLabel(selectedSubtype)} ${sameTypeCount + 1}`;
       const plan: EditorPlan = {
         clientKey: makeClientKey(),
         name: defaultName,
+        carrierName: null,
         subtype: selectedSubtype,
         offered: true,
         details: isRateBenefitType(benefitType)
@@ -141,6 +145,7 @@ export function PolicyDetailsEditor({
         .map<EditorPlan>((suggestion, index) => ({
           clientKey: makeClientKey(),
           name: suggestion.planName,
+          carrierName: null,
           subtype: suggestion.subtype,
           offered: true,
           details: { tierStructure: "four-tier" },
@@ -383,6 +388,7 @@ export function PolicyDetailsEditor({
                     key={plan.clientKey}
                     benefitType={activeBenefit}
                     plan={plan}
+                    carrierSuggestions={carriersByBenefitType[activeBenefit] ?? []}
                     onChange={(updater) => updatePlan(plan.clientKey, updater)}
                     onDuplicate={() => duplicatePlan(plan)}
                     onRemove={() => removePlan(plan.clientKey)}
@@ -448,7 +454,7 @@ function AddPlanButton({
       <option value="">Add plan or class...</option>
       {options.map((option) => (
         <option key={option} value={option}>
-          {option}
+          {subtypeDisplayLabel(option)}
         </option>
       ))}
     </select>
@@ -458,12 +464,14 @@ function AddPlanButton({
 function PlanCard({
   benefitType,
   plan,
+  carrierSuggestions,
   onChange,
   onDuplicate,
   onRemove,
 }: {
   benefitType: BenefitType;
   plan: EditorPlan;
+  carrierSuggestions: string[];
   onChange: (updater: (plan: EditorPlan) => EditorPlan) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -475,7 +483,17 @@ function PlanCard({
   return (
     <article className="rounded-[14px] border border-border-light bg-panel-tint">
       <div className="flex flex-col gap-4 border-b border-border-lighter p-4 sm:flex-row sm:items-end sm:p-5">
-        <div className="grid flex-1 gap-3 sm:grid-cols-[minmax(180px,1fr)_150px_auto]">
+        <div className="grid flex-1 gap-3 sm:grid-cols-[minmax(160px,1fr)_minmax(180px,1fr)_150px_auto]">
+          <div>
+            <label className={labelClass}>Carrier</label>
+            <CarrierCombobox
+              value={plan.carrierName ?? ""}
+              suggestions={carrierSuggestions}
+              onChange={(value) =>
+                onChange((current) => ({ ...current, carrierName: value || null }))
+              }
+            />
+          </div>
           <div>
             <label className={labelClass}>Plan or class name</label>
             <input
@@ -497,7 +515,7 @@ function PlanCard({
             >
               {PLAN_SUBTYPES[benefitType].map((subtype) => (
                 <option key={subtype} value={subtype}>
-                  {subtype}
+                  {subtypeDisplayLabel(subtype)}
                 </option>
               ))}
             </select>
@@ -524,7 +542,37 @@ function PlanCard({
         </div>
       </div>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      <div className="space-y-5 p-4 sm:p-5">
+        {detailGroups.length > 0 && (
+          <div className="space-y-5">
+            {detailGroups.map((group) => (
+              <div key={group.key}>
+                <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-text-600">
+                  {group.label}
+                </h4>
+                {group.description && (
+                  <p className="mt-1 text-xs text-text-400">{group.description}</p>
+                )}
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.fields.map((field) => (
+                    <DetailFieldInput
+                      key={field.key}
+                      field={field}
+                      value={plan.details[field.key]}
+                      onChange={(value) =>
+                        onChange((current) => ({
+                          ...current,
+                          details: { ...current.details, [field.key]: value },
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {isRateBenefitType(benefitType) && (
           <>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -583,77 +631,89 @@ function PlanCard({
           </>
         )}
 
-        <details className="group rounded-[12px] border border-border-lighter bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-text-900 marker:hidden">
-            <span className="flex items-center justify-between">
-              Plan details
-              <span className="text-text-400 transition-transform group-open:rotate-180">⌄</span>
-            </span>
-          </summary>
-          <div className="space-y-5 border-t border-border-lighter p-4">
-            {detailGroups.map((group) => (
-              <div key={group.key}>
-                <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-text-600">
-                  {group.label}
-                </h4>
-                {group.description && (
-                  <p className="mt-1 text-xs text-text-400">{group.description}</p>
-                )}
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.fields.map((field) => (
-                    <DetailFieldInput
-                      key={field.key}
-                      field={field}
-                      value={plan.details[field.key]}
-                      onChange={(value) =>
-                        onChange((current) => ({
-                          ...current,
-                          details: { ...current.details, [field.key]: value },
-                        }))
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-            <div>
-              <label className={labelClass}>Notes or “Other” explanation</label>
-              <textarea
-                value={typeof plan.details.notes === "string" ? plan.details.notes : ""}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    details: { ...current.details, notes: event.target.value },
-                  }))
-                }
-                rows={3}
-                className="w-full rounded-[10px] border border-input-border bg-white px-3 py-2 text-[13px] text-text-900 focus:border-teal-deep focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Census plan aliases</label>
-              <input
-                value={plan.aliases.join(", ")}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    aliases: event.target.value
-                      .split(",")
-                      .map((alias) => alias.trim())
-                      .filter(Boolean),
-                  }))
-                }
-                placeholder="Carrier PPO, PPO Option 1"
-                className={inputClass}
-              />
-              <p className="mt-1 text-[11px] text-text-400">
-                Comma-separated names used by census files for this plan.
-              </p>
-            </div>
-          </div>
-        </details>
+        <div>
+          <label className={labelClass}>Notes or “Other” explanation</label>
+          <textarea
+            value={typeof plan.details.notes === "string" ? plan.details.notes : ""}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                details: { ...current.details, notes: event.target.value },
+              }))
+            }
+            rows={3}
+            className="w-full rounded-[10px] border border-input-border bg-white px-3 py-2 text-[13px] text-text-900 focus:border-teal-deep focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Census plan aliases</label>
+          <input
+            value={plan.aliases.join(", ")}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                aliases: event.target.value
+                  .split(",")
+                  .map((alias) => alias.trim())
+                  .filter(Boolean),
+              }))
+            }
+            placeholder="Carrier PPO, PPO Option 1"
+            className={inputClass}
+          />
+          <p className="mt-1 text-[11px] text-text-400">
+            Comma-separated names used by census files for this plan.
+          </p>
+        </div>
       </div>
     </article>
+  );
+}
+
+function CarrierCombobox({
+  value,
+  suggestions,
+  onChange,
+}: {
+  value: string;
+  suggestions: string[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const matches = suggestions
+    .filter((name) => name.toLowerCase().includes(value.trim().toLowerCase()))
+    .slice(0, 8);
+
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        placeholder="Type to search..."
+        className={inputClass}
+      />
+      {open && matches.length > 0 && (
+        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-[10px] border border-input-border bg-white text-[13px] shadow-lg">
+          {matches.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onChange(name);
+                  setOpen(false);
+                }}
+                className="block w-full px-3 py-2 text-left text-text-900 hover:bg-panel-tint"
+              >
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -937,6 +997,7 @@ function createVoluntaryOfferingsPlan(): EditorPlan {
   return {
     clientKey: makeClientKey(),
     name: VOLUNTARY_OFFERINGS_PLAN_NAME,
+    carrierName: null,
     subtype: VOLUNTARY_OFFERINGS_PLAN_SUBTYPE,
     offered: true,
     details: {},

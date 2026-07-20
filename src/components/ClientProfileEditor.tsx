@@ -353,12 +353,12 @@ function OrganizationSection({ data, update }: { data: EditorData; update: (upda
           <SelectField label="Entity structure" value={profile.entityStructure ?? ""} options={ENTITY_STRUCTURES} onChange={(value) => setProfile("entityStructure", nullable(value))} />
           {profile.entityStructure && profile.entityStructure !== "Single Entity" && <NumberField label="Number of EINs" value={profile.numberOfEins} min={1} onChange={(value) => setProfile("numberOfEins", value)} />}
           <BooleanField label="Benefits consistent across all entities?" value={profile.benefitsConsistentAcrossEntities} onChange={(value) => setProfile("benefitsConsistentAcrossEntities", value)} />
+          {profile.benefitsConsistentAcrossEntities === false && <div className="sm:col-span-2"><TextField label="Why aren't benefits consistent across entities?" value={profile.benefitsConsistencyNotes ?? ""} onChange={(value) => setProfile("benefitsConsistencyNotes", nullable(value))} /></div>}
           <BooleanField label="Union populations?" value={profile.hasUnionPopulation} onChange={(value) => setProfile("hasUnionPopulation", value)} />
           {profile.hasUnionPopulation && <BooleanField label="Any plans collectively bargained?" value={profile.hasCollectivelyBargainedPlans} onChange={(value) => setProfile("hasCollectivelyBargainedPlans", value)} />}
           <BooleanField label="Acquired companies with separate programs?" value={profile.hasAcquiredCompanies} onChange={(value) => setProfile("hasAcquiredCompanies", value)} />
           <BooleanField label="International employees?" value={profile.hasInternationalEmployees} onChange={(value) => setProfile("hasInternationalEmployees", value)} />
           <BooleanField label="Currently covered through a PEO?" value={profile.coveredThroughPeo} onChange={(value) => setProfile("coveredThroughPeo", value)} />
-          <NumberField label="Approximate remote employee percentage" value={profile.remoteEmployeePercentage} max={100} step="0.1" suffix="%" onChange={(value) => setProfile("remoteEmployeePercentage", value)} />
         </div>
         <fieldset className="mt-5"><legend className={labelClass}>Seasonal, temporary, part-time, or variable-hour employees</legend><div className="flex flex-wrap gap-2">{WORKFORCE_TYPES.map((type) => <ToggleChip key={type} label={type} selected={profile.workforceTypes.includes(type)} onClick={() => setProfile("workforceTypes", toggleWorkforceType(profile.workforceTypes, type))} />)}</div></fieldset>
         <div className="mt-5"><StatePicker selected={profile.statesWithEmployees} onChange={(states) => setProfile("statesWithEmployees", states)} /></div>

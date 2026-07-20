@@ -48,7 +48,7 @@ export default async function PlanYearDetailPage({
   if (!planYear || planYear.clientId !== clientId) notFound();
 
   const latestUpload = planYear.censusUploads[0];
-  const [electionGroups, priorWithPrograms] = await Promise.all([
+  const [electionGroups, priorWithPrograms, carriers] = await Promise.all([
     prisma.benefitElection.groupBy({
       by: ["benefitType", "planName", "optionName"],
       where: {
@@ -69,7 +69,12 @@ export default async function PlanYearDetailPage({
           select: { id: true },
         })
       : Promise.resolve(null),
+    prisma.carrier.findMany({ orderBy: { name: "asc" } }),
   ]);
+  const carriersByBenefitType = carriers.reduce<Record<string, string[]>>((acc, carrier) => {
+    (acc[carrier.benefitType] ??= []).push(carrier.name);
+    return acc;
+  }, {});
 
   const initialPrograms: PolicyProgramInput[] = planYear.benefitPrograms
     .filter((program) => isBenefitType(program.benefitType))
@@ -79,6 +84,7 @@ export default async function PlanYearDetailPage({
       plans: program.plans.map((plan) => ({
         id: plan.id,
         name: plan.name,
+        carrierName: plan.carrierName,
         subtype: plan.subtype,
         offered: plan.offered,
         details: policyPlanDetails(plan.details),
@@ -134,6 +140,7 @@ export default async function PlanYearDetailPage({
           initialPrograms={initialPrograms}
           censusSuggestions={censusSuggestions}
           canCopyPrior={Boolean(priorWithPrograms)}
+          carriersByBenefitType={carriersByBenefitType}
         />
       </div>
 

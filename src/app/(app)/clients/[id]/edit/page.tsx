@@ -72,6 +72,7 @@ export default async function EditClientPage({
       entityStructure: profile?.entityStructure ?? null,
       numberOfEins: profile?.numberOfEins ?? null,
       benefitsConsistentAcrossEntities: profile?.benefitsConsistentAcrossEntities ?? null,
+      benefitsConsistencyNotes: profile?.benefitsConsistencyNotes ?? null,
       hasUnionPopulation: profile?.hasUnionPopulation ?? null,
       hasCollectivelyBargainedPlans: profile?.hasCollectivelyBargainedPlans ?? null,
       hasAcquiredCompanies: profile?.hasAcquiredCompanies ?? null,

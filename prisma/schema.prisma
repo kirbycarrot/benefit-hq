@@ -92,6 +92,7 @@ model ClientProfile {
   entityStructure                  String?
   numberOfEins                     Int?
   benefitsConsistentAcrossEntities Boolean?
+  benefitsConsistencyNotes         String?
   hasUnionPopulation               Boolean?
   hasCollectivelyBargainedPlans    Boolean?
   hasAcquiredCompanies             Boolean?
@@ -259,6 +260,7 @@ model BenefitPlan {
   benefitProgramId    String
   benefitProgram      BenefitProgram @relation(fields: [benefitProgramId], references: [id], onDelete: Cascade)
   name                String
+  carrierName         String?
   subtype             String
   offered             Boolean        @default(true)
   details             Json           @default("{}")
@@ -275,6 +277,19 @@ model BenefitPlan {
 
   @@index([benefitProgramId, sortOrder])
   @@index([renewedFromPlanId])
+}
+
+// Carrier names typed on a plan are saved here (scoped per benefit type) so
+// they resurface as autocomplete suggestions the next time someone types a
+// plan's carrier for that same benefit type.
+model Carrier {
+  id          String   @id @default(cuid())
+  benefitType String
+  name        String
+  createdAt   DateTime @default(now())
+
+  @@unique([benefitType, name])
+  @@index([benefitType])
 }
 
 model PlanRate {

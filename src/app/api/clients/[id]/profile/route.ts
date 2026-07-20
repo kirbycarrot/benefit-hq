@@ -114,6 +114,7 @@ export async function PUT(
         entityStructure: nullIfEmpty(profile.entityStructure),
         numberOfEins: profile.numberOfEins,
         benefitsConsistentAcrossEntities: profile.benefitsConsistentAcrossEntities,
+        benefitsConsistencyNotes: nullIfEmpty(profile.benefitsConsistencyNotes),
         hasUnionPopulation: profile.hasUnionPopulation,
         hasCollectivelyBargainedPlans:
           profile.hasUnionPopulation === false ? false : profile.hasCollectivelyBargainedPlans,

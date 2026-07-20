@@ -79,6 +79,7 @@ export async function POST(
           data: {
             benefitProgramId: createdProgram.id,
             name: plan.name,
+            carrierName: plan.carrierName,
             subtype: plan.subtype,
             offered: plan.offered,
             details: plan.details as Prisma.InputJsonValue,

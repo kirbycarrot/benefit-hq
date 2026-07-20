@@ -68,7 +68,7 @@ test("policy detail summaries format only recorded and visible provisions", () =
         items: [["Arrangement", "Self-Funded"]],
       },
       {
-        label: "Plan design",
+        label: "Plan design attributes",
         items: [
           ["Individual deductible", "$2,300"],
           ["Member coinsurance", "20%"],

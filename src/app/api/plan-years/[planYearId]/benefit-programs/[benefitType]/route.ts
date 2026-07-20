@@ -123,9 +123,13 @@ export async function PUT(
       }
 
       const savedPlanIds: string[] = [];
+      const carrierNamesUsed = new Set<string>();
       for (const planInput of parsed.data.plans) {
+        const carrierName = nullIfEmpty(planInput.carrierName);
+        if (carrierName) carrierNamesUsed.add(carrierName);
         const planData = {
           name: planInput.name,
+          carrierName,
           subtype: planInput.subtype,
           offered: planInput.offered,
           details: planInput.details as Prisma.InputJsonValue,
@@ -186,6 +190,14 @@ export async function PUT(
         }
       }
 
+      for (const name of carrierNamesUsed) {
+        await tx.carrier.upsert({
+          where: { benefitType_name: { benefitType: parsed.data.benefitType, name } },
+          update: {},
+          create: { benefitType: parsed.data.benefitType, name },
+        });
+      }
+
       await tx.benefitPlan.deleteMany({
         where: {
           benefitProgramId: program.id,
@@ -241,6 +253,10 @@ export async function PUT(
     }
     throw error;
   }
+}
+
+function nullIfEmpty(value: string | null | undefined): string | null {
+  return value?.trim() ? value.trim() : null;
 }
 
 function roundCurrency(value: number): number {

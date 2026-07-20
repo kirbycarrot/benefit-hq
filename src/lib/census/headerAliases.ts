@@ -80,7 +80,12 @@ export const LIFE_STD_LTD_ALIASES: Record<LifeStdLtdField, string[]> = {
   memberSSN: ["member social", "member ssn", "social security number"],
   memberId: ["member id"],
   memberClass: ["class"],
-  basicLifeVolume: ["basic term life volume", "basic life volume"],
+  basicLifeVolume: [
+    "basic term life volume",
+    "basic life volume",
+    "employer paid term life volume",
+    "employer paid life volume",
+  ],
   ltdVolume: ["ltd volume"],
   stdVolume: ["std volume"],
   voluntaryADDVolume: ["voluntary ad d volume", "voluntary add volume"],

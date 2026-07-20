@@ -650,7 +650,7 @@ function computePremiumSummaryTable(ds: ChartDataset): ChartResult {
 function computeAncillaryVolumeSummary(ds: ChartDataset): ChartResult {
   const total = ds.employees.length;
   const types = [
-    { key: "Life", label: "Basic Life" },
+    { key: "Life", label: "Employer Paid Life" },
     { key: "LTD", label: "LTD" },
     { key: "STD", label: "STD" },
     { key: "VoluntaryLife", label: "Voluntary Life" },
@@ -1421,7 +1421,7 @@ function computeLifeVolumeDistribution(ds: ChartDataset): ChartResult {
   }
   return {
     kind: "bar",
-    title: "Basic Life Volume Distribution",
+    title: "Employer Paid Life Volume Distribution",
     xKey: "band",
     series: [{ key: "Employees", label: "Employees" }],
     data: rows,

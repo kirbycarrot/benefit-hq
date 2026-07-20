@@ -247,8 +247,8 @@ export const CHART_DEFINITIONS = [
   },
   {
     key: "life-volume-distribution",
-    label: "Basic Life Volume Distribution",
-    description: "Employees grouped by elected basic life insurance volume.",
+    label: "Employer Paid Life Volume Distribution",
+    description: "Employees grouped by elected employer paid life insurance volume.",
     category: "ancillary benefits",
     defaultEnabled: false,
     sortOrder: 510,

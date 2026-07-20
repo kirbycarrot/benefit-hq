@@ -34,7 +34,7 @@ export const BENEFIT_META: Record<
     sortOrder: 30,
   },
   BasicLife: {
-    label: "Basic life",
+    label: "Employer paid life",
     description: "Employer-sponsored life insurance by class",
     sortOrder: 40,
   },
@@ -70,6 +70,16 @@ export const PLAN_SUBTYPES: Record<BenefitType, readonly string[]> = {
   LTD: ["LTD"],
   VoluntaryOfferings: ["Voluntary Offerings"],
 };
+
+// Displayed in place of a stored subtype value without changing the value
+// itself, so existing plan records and census alias matching are unaffected.
+const SUBTYPE_DISPLAY_LABELS: Record<string, string> = {
+  "Basic Life": "Employer Paid Life",
+};
+
+export function subtypeDisplayLabel(subtype: string): string {
+  return SUBTYPE_DISPLAY_LABELS[subtype] ?? subtype;
+}
 
 export const VOLUNTARY_PLAN_OFFERINGS = [
   { key: "accident", label: "Accident" },
@@ -214,7 +224,7 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
     },
     {
       key: "design",
-      label: "Plan design",
+      label: "Plan design attributes",
       fields: [
         { key: "actuarialValue", label: "Actuarial value", type: "percent" },
         { key: "deductibleIndividual", label: "Individual deductible", type: "currency" },
@@ -261,7 +271,7 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
   Dental: [
     {
       key: "dental-design",
-      label: "DPPO plan design",
+      label: "DPPO plan design attributes",
       fields: [
         { key: "deductibleIndividual", label: "Individual deductible", type: "currency", subtypes: ["DPPO"] },
         { key: "deductibleFamily", label: "Family deductible", type: "currency", subtypes: ["DPPO"] },
@@ -284,7 +294,7 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
   Vision: [
     {
       key: "vision-design",
-      label: "Vision plan design",
+      label: "Vision plan design attributes",
       fields: [
         { key: "examFrequencyMonths", label: "Exam frequency", type: "number", suffix: "months" },
         { key: "lensesFrequencyMonths", label: "Lenses frequency", type: "number", suffix: "months" },
@@ -299,7 +309,7 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
   BasicLife: [
     {
       key: "basic-life",
-      label: "Basic life provisions",
+      label: "Employer paid life provisions",
       fields: [
         {
           key: "benefitFormula",
@@ -338,12 +348,12 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
       key: "std",
       label: "Short-term disability provisions",
       fields: [
-        { key: "subsidy", label: "Subsidy", type: "select", options: ["N/A", "Basic", "Subsidized", "Voluntary", "Other"] },
+        { key: "subsidy", label: "Subsidy", type: "select", options: ["Employer paid", "Voluntary"] },
         { key: "eliminationPeriodAccident", label: "Elimination period — accident", type: "number", suffix: "days" },
         { key: "eliminationPeriodSickness", label: "Elimination period — sickness", type: "number", suffix: "days" },
         { key: "benefitPercentage", label: "Benefit percentage", type: "percent" },
         { key: "maximumBenefit", label: "Maximum weekly benefit", type: "currency" },
-        { key: "benefitPeriodWeeks", label: "Benefit period", type: "number", suffix: "weeks, including EP" },
+        { key: "benefitPeriodWeeks", label: "Benefit duration", type: "number", suffix: "weeks, including EP" },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -354,11 +364,11 @@ export const POLICY_DETAIL_GROUPS: Record<BenefitType, readonly PolicyDetailGrou
       key: "ltd",
       label: "Long-term disability provisions",
       fields: [
-        { key: "subsidy", label: "Subsidy", type: "select", options: ["N/A", "Basic", "Subsidized", "Voluntary", "Other"] },
+        { key: "subsidy", label: "Subsidy", type: "select", options: ["Employer paid", "Voluntary"] },
         { key: "eliminationPeriod", label: "Elimination period", type: "number", suffix: "days" },
         { key: "benefitPercentage", label: "Benefit percentage", type: "percent" },
         { key: "maximumBenefit", label: "Maximum monthly benefit", type: "currency" },
-        { key: "benefitPeriod", label: "Benefit period", type: "text", help: "The workbook assumes SSNRA / age 65." },
+        { key: "benefitPeriod", label: "Benefit duration", type: "text", help: "The workbook assumes SSNRA / age 65." },
         { key: "annualPremium", label: "Annual premium", type: "currency" },
         { key: "enrollment", label: "Enrollment", type: "number" },
       ],
@@ -397,6 +407,7 @@ const detailValueSchema = z.union([
 export const benefitPlanInputSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1, "Plan or class name is required").max(200),
+  carrierName: z.string().trim().max(200).nullable().optional(),
   subtype: z.string().trim().min(1).max(100),
   offered: z.boolean(),
   details: z.record(z.string().min(1).max(100), detailValueSchema),

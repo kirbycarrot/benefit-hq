@@ -46,6 +46,7 @@ const profileExportSchema = z.object({
   entityStructure: z.string().nullable(),
   numberOfEins: z.number().int().nullable(),
   benefitsConsistentAcrossEntities: z.boolean().nullable(),
+  benefitsConsistencyNotes: z.string().nullable(),
   hasUnionPopulation: z.boolean().nullable(),
   hasCollectivelyBargainedPlans: z.boolean().nullable(),
   hasAcquiredCompanies: z.boolean().nullable(),
@@ -150,6 +151,7 @@ const planAliasExportSchema = z.object({
 const benefitPlanExportSchema = z.object({
   exportId: z.string().min(1),
   name: z.string().min(1),
+  carrierName: z.string().nullable(),
   subtype: z.string().min(1),
   offered: z.boolean(),
   details: jsonValue,
@@ -377,6 +379,7 @@ export async function buildClientExportPayload(clientId: string): Promise<Client
             entityStructure: client.profile.entityStructure,
             numberOfEins: client.profile.numberOfEins,
             benefitsConsistentAcrossEntities: client.profile.benefitsConsistentAcrossEntities,
+            benefitsConsistencyNotes: client.profile.benefitsConsistencyNotes,
             hasUnionPopulation: client.profile.hasUnionPopulation,
             hasCollectivelyBargainedPlans: client.profile.hasCollectivelyBargainedPlans,
             hasAcquiredCompanies: client.profile.hasAcquiredCompanies,
@@ -457,6 +460,7 @@ export async function buildClientExportPayload(clientId: string): Promise<Client
           plans: program.plans.map((plan) => ({
             exportId: planExportIds.get(plan.id)!,
             name: plan.name,
+            carrierName: plan.carrierName,
             subtype: plan.subtype,
             offered: plan.offered,
             details: plan.details as Prisma.InputJsonValue,
@@ -626,6 +630,7 @@ async function importClientRecords(
           entityStructure: data.profile.entityStructure,
           numberOfEins: data.profile.numberOfEins,
           benefitsConsistentAcrossEntities: data.profile.benefitsConsistentAcrossEntities,
+          benefitsConsistencyNotes: data.profile.benefitsConsistencyNotes,
           hasUnionPopulation: data.profile.hasUnionPopulation,
           hasCollectivelyBargainedPlans: data.profile.hasCollectivelyBargainedPlans,
           hasAcquiredCompanies: data.profile.hasAcquiredCompanies,
@@ -726,6 +731,7 @@ async function importClientRecords(
             data: {
               benefitProgramId: createdProgram.id,
               name: plan.name,
+              carrierName: plan.carrierName,
               subtype: plan.subtype,
               offered: plan.offered,
               details: plan.details,
