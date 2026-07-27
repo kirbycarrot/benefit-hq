@@ -149,6 +149,12 @@ release_commit="$(git rev-parse HEAD)"
 run_step "Installing the locked dependency set and regenerating Prisma" npm ci --include=dev
 run_step "Regenerating Prisma Client explicitly" npx prisma generate
 
+# .next persists on disk between in-place deployments (git pull doesn't touch
+# gitignored files). tsconfig.json includes .next/types/**/*.ts, so a stale
+# build from the previous release can make the standalone TypeScript check
+# below validate against routes/types that no longer exist in this checkout.
+run_step "Clearing the previous .next build output" rm -rf .next
+
 run_step "Validating production environment variables" node -e '
   require("dotenv").config({ quiet: true });
   const missing = ["DATABASE_URL", "AUTH_SECRET"].filter((key) => !process.env[key]);
