@@ -13,15 +13,28 @@ import {
   US_STATES,
   WORKFORCE_TYPES,
   type ClientOnboardingInput,
+  type OnboardingSectionKey,
 } from "@/lib/client-onboarding";
 import { prisma } from "@/lib/prisma";
 
+const SECTION_KEYS: OnboardingSectionKey[] = [
+  "profile",
+  "team",
+  "organization",
+  "goals",
+  "documents",
+];
+
 export default async function EditClientPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ section?: string }>;
 }) {
   const { id } = await params;
+  const { section } = await searchParams;
+  const initialSection = SECTION_KEYS.find((key) => key === section) ?? "profile";
   const [session, client, users] = await Promise.all([
     auth(),
     prisma.client.findUnique({
@@ -171,6 +184,7 @@ export default async function EditClientPage({
         users={users}
         planYears={client.planYears}
         initialDocuments={documents}
+        initialSection={initialSection}
       />
 
       {session?.user?.isAdmin && (

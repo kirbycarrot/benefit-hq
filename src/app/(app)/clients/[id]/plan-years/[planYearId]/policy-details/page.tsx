@@ -8,12 +8,11 @@ import {
   CENSUS_ELECTION_BENEFIT_TYPE,
   inferPlanSubtype,
   normalizePolicyName,
+  policyProgramsFromRecords,
   policyTierFromCensusOption,
   type AncillaryVolumeBenefitType,
   type BenefitType,
   type CensusPlanSuggestion,
-  type CustomPlanAttribute,
-  type PolicyPlanDetails,
   type PolicyProgramInput,
   type RateBenefitType,
 } from "@/lib/policy-details";
@@ -109,33 +108,9 @@ export default async function PolicyDetailsPage({
       fields: doc.extractedFields as unknown as SbcExtractedFields,
     }));
 
-  const initialPrograms: PolicyProgramInput[] = planYear.benefitPrograms
-    .filter((program) => isBenefitType(program.benefitType))
-    .map((program) => ({
-      benefitType: program.benefitType as BenefitType,
-      offered: program.offered,
-      plans: program.plans.map((plan) => ({
-        id: plan.id,
-        name: plan.name,
-        carrierName: plan.carrierName,
-        subtype: plan.subtype,
-        offered: plan.offered,
-        details: policyPlanDetails(plan.details),
-        customAttributes: customPlanAttributes(plan.customAttributes),
-        detailSchemaVersion: 1,
-        renewedFromPlanId: plan.renewedFromPlanId,
-        sortOrder: plan.sortOrder,
-        aliases: plan.aliases.map((alias) => alias.alias),
-        rates: plan.rates.map((rate) => ({
-          tier: rate.tier as PolicyProgramInput["plans"][number]["rates"][number]["tier"],
-          grossPremium: rate.grossPremium.toNumber(),
-          employeeContribution: rate.employeeContribution.toNumber(),
-          ratePeriod: rate.ratePeriod as PolicyProgramInput["plans"][number]["rates"][number]["ratePeriod"],
-          enrollmentOverride: rate.enrollmentOverride ?? undefined,
-          sortOrder: rate.sortOrder,
-        })),
-      })),
-    }));
+  const initialPrograms: PolicyProgramInput[] = policyProgramsFromRecords(
+    planYear.benefitPrograms
+  );
   const censusSuggestions = buildCensusSuggestions(electionGroups);
   const policyEditorVersion = planYear.benefitPrograms
     .flatMap((program) => [
@@ -172,31 +147,6 @@ export default async function PolicyDetailsPage({
         pendingSbcExtractions={pendingSbcExtractions}
       />
     </div>
-  );
-}
-
-function isBenefitType(value: string): value is BenefitType {
-  return BENEFIT_TYPES.includes(value as BenefitType);
-}
-
-function policyPlanDetails(value: unknown): PolicyPlanDetails {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
-      const item = entry[1];
-      return item === null || ["string", "number", "boolean"].includes(typeof item);
-    })
-  );
-}
-
-function customPlanAttributes(value: unknown): CustomPlanAttribute[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (item): item is CustomPlanAttribute =>
-      typeof item === "object" &&
-      item !== null &&
-      typeof (item as { label?: unknown }).label === "string" &&
-      typeof (item as { value?: unknown }).value === "string"
   );
 }
 

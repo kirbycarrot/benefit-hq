@@ -3,13 +3,41 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteStoredFile, saveLogo, storedLogoPathFromUrl } from "@/lib/storage";
 import { detectLogoType } from "@/lib/uploads";
-import { newClientIntakeSchema } from "@/lib/client-onboarding";
+import { newClientIntakeSchema, quickClientIntakeSchema } from "@/lib/client-onboarding";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (request.headers.get("content-type")?.includes("application/json")) {
+    const body = await request.json();
+    const parsed = quickClientIntakeSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    const client = await prisma.client.create({
+      data: {
+        name: parsed.data.name,
+        createdById: session.user.id,
+        profile: {
+          create: {
+            legalName: parsed.data.name,
+            primaryIndustry: parsed.data.primaryIndustry,
+            primaryRenewalMonth: parsed.data.primaryRenewalMonth,
+            primaryRenewalDay: parsed.data.primaryRenewalDay,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ id: client.id, onboarding: true });
   }
 
   const formData = await request.formData();

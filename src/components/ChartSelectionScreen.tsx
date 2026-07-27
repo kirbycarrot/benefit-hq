@@ -102,12 +102,14 @@ export function ChartSelectionScreen({
   initialSelections,
   chartResults,
   automaticContent,
+  deckActions,
 }: {
   planYearId: string;
   chartDefinitions: ChartDefinition[];
   initialSelections: Record<string, ChartSelection>;
   chartResults: Record<string, ChartResult>;
   automaticContent: AutomaticDeckContent;
+  deckActions?: React.ReactNode;
 }) {
   const [selections, setSelections] = useState(initialSelections);
   const [saving, setSaving] = useState(false);
@@ -166,41 +168,23 @@ export function ChartSelectionScreen({
     (acc[def.category] ??= []).push(def);
     return acc;
   }, {});
+  const selectedCount = chartDefinitions.filter(
+    (def) => selections[def.key]?.enabled ?? true
+  ).length;
 
   return (
-    <div>
-      {saving && <p className="mb-2 text-xs text-text-400">Saving...</p>}
-      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
-      <AutomaticExportSummary
-        selections={selections}
-        content={automaticContent}
-      />
-      {Object.entries(grouped).map(([category, defs]) => (
-        <details key={category} open className="group mb-6">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-[12px] border border-border-light bg-panel-tint px-4 py-3 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-deep [&::-webkit-details-marker]:hidden">
-            <span className="text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6">
+      <div className="min-w-0">
+        {saving && <p className="mb-2 text-xs text-text-400">Saving...</p>}
+        {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+        {Object.entries(grouped).map(([category, defs]) => (
+          <section
+            key={category}
+            className="mb-4 rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:p-5"
+          >
+            <h3 className="text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
               {category}
-            </span>
-            <span className="flex shrink-0 items-center gap-3">
-              <span className="text-[11px] font-medium text-text-400">
-                {defs.length} {defs.length === 1 ? "item" : "items"}
-              </span>
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                fill="none"
-                className="h-4 w-4 text-text-600 transition-transform duration-200 group-open:rotate-180"
-              >
-                <path
-                  d="m5 7.5 5 5 5-5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </summary>
+            </h3>
           <div className="mt-4 space-y-4">
             {defs.map((def) => {
               const selection = selections[def.key] ?? { enabled: true };
@@ -272,8 +256,18 @@ export function ChartSelectionScreen({
               );
             })}
           </div>
-        </details>
-      ))}
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-6 lg:sticky lg:top-9 lg:mt-0">
+        <AutomaticExportSummary
+          selections={selections}
+          content={automaticContent}
+          selectedCount={selectedCount}
+        />
+        {deckActions}
+      </div>
     </div>
   );
 }
@@ -281,9 +275,11 @@ export function ChartSelectionScreen({
 function AutomaticExportSummary({
   selections,
   content,
+  selectedCount,
 }: {
   selections: Record<string, ChartSelection>;
   content: AutomaticDeckContent;
+  selectedCount: number;
 }) {
   const contributionEnabled = selections["contribution-strategy"]?.enabled ?? false;
   const prevalenceEnabled = selections["plan-option-enrollment"]?.enabled ?? false;
@@ -291,55 +287,32 @@ function AutomaticExportSummary({
     ? content.mercerCostSlides + content.mercerDesignSlides
     : 0;
   const prevalenceSlides = prevalenceEnabled ? content.mercerPrevalenceSlides : 0;
-  const automaticSlideCount =
-    (content.additionalBenefits.length > 0 ? 1 : 0) + mercerSlides + prevalenceSlides;
+  const automaticSlideCount = mercerSlides + prevalenceSlides;
+
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "Company analyses", value: `${selectedCount} selected` },
+    {
+      label: "Mercer context slides",
+      value: automaticSlideCount > 0 ? `${automaticSlideCount} automatic` : "None yet",
+    },
+    {
+      label: "Additional benefits slide",
+      value: content.additionalBenefits.length > 0 ? "Included" : "Omitted",
+    },
+    { label: "Recommendations slide", value: "Automatic" },
+  ];
 
   return (
-    <section className="mb-6 rounded-[14px] border border-border-light bg-panel-tint p-4 sm:p-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <p className="text-xs font-bold tracking-[0.08em] text-text-600 uppercase">
-            Automatic export content
-          </p>
-          <p className="mt-1 text-sm text-text-600">
-            These slides are added from recorded policy data when their related analysis is included.
-          </p>
-        </div>
-        <span className="shrink-0 text-xs font-semibold text-text-400">
-          {automaticSlideCount} data-driven {automaticSlideCount === 1 ? "slide" : "slides"}
-        </span>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-[10px] bg-white p-4">
-          <p className="text-sm font-semibold text-text-900">Additional Benefits Offered</p>
-          {content.additionalBenefits.length > 0 ? (
-            <p className="mt-1 text-xs leading-5 text-text-600">
-              {content.additionalBenefits.join(" · ")}
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-text-400">
-              Omitted because no voluntary offerings are selected.
-            </p>
-          )}
-        </div>
-        <div className="rounded-[10px] bg-white p-4">
-          <p className="text-sm font-semibold text-text-900">Mercer market context</p>
-          {mercerSlides + prevalenceSlides > 0 ? (
-            <p className="mt-1 text-xs leading-5 text-text-600">
-              {mercerSlides + prevalenceSlides} comparison {mercerSlides + prevalenceSlides === 1 ? "slide" : "slides"}
-              {content.peerLabel ? ` using ${content.peerLabel}` : ""}. Context follows the enabled cost and medical-plan analyses.
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-text-400">
-              No matching Mercer slide is available for the currently enabled analyses.
-            </p>
-          )}
-        </div>
-      </div>
-      <p className="mt-3 text-[10px] leading-4 text-text-400">
-        The PowerPoint also includes a title page, section dividers, and a closing recommendations slide.
-      </p>
+    <section className="rounded-[14px] border border-border-light bg-white p-5 shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
+      <h3 className="text-[15px] font-bold text-text-900">Deck preview</h3>
+      <dl className="mt-3 space-y-2.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
+            <dt className="text-text-600">{row.label}</dt>
+            <dd className="font-bold text-text-900">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

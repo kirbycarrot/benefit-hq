@@ -162,18 +162,25 @@ export default async function ChartsPage({
           render.
         </p>
       ) : (
-        <div>
-          <ChartSelectionScreen
-            planYearId={planYearId}
-            chartDefinitions={chartDefinitions}
-            initialSelections={initialSelections}
-            chartResults={chartResults}
-            automaticContent={automaticContent}
-          />
-          <div className="mt-6">
-            <DeckGenerator planYearId={planYearId} />
-          </div>
-        </div>
+        <ChartSelectionScreen
+          planYearId={planYearId}
+          chartDefinitions={chartDefinitions}
+          initialSelections={initialSelections}
+          chartResults={chartResults}
+          automaticContent={automaticContent}
+          deckActions={
+            <div className="mt-4 space-y-3">
+              <DeckGenerator key="deck-generator" planYearId={planYearId} />
+              <Link
+                key="benchmark-qa-link"
+                href={`/clients/${clientId}/plan-years/${planYearId}/benchmarking`}
+                className="block text-center text-xs font-semibold text-text-600 underline decoration-border-light underline-offset-2 hover:text-text-900"
+              >
+                Advanced benchmark QA
+              </Link>
+            </div>
+          }
+        />
       )}
     </div>
   );

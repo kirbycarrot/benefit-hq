@@ -62,6 +62,7 @@ export function ClientProfileEditor({
   users,
   planYears,
   initialDocuments,
+  initialSection = "profile",
 }: {
   clientId: string;
   initial: ClientOnboardingInput;
@@ -69,10 +70,11 @@ export function ClientProfileEditor({
   users: Array<{ id: string; name: string; email: string }>;
   planYears: Array<{ id: string; label: string }>;
   initialDocuments: ClientDocumentView[];
+  initialSection?: OnboardingSectionKey;
 }) {
   const router = useRouter();
   const [data, setData] = useState<EditorData>(() => initializeEditor(initial));
-  const [activeSection, setActiveSection] = useState<OnboardingSectionKey>("profile");
+  const [activeSection, setActiveSection] = useState<OnboardingSectionKey>(initialSection);
   const [documents, setDocuments] = useState(initialDocuments);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(initialLogoPath);
@@ -192,9 +194,18 @@ export function ClientProfileEditor({
               {message && <p className="text-sm text-success">{message}</p>}
               {!error && !message && dirty && <p className="text-xs text-amber">You have unsaved profile changes.</p>}
             </div>
-            <button type="button" disabled={saving || !dirty} onClick={() => void saveProfile()} className="h-11 rounded-full bg-ink-900 px-6 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-45">
-              {saving ? "Saving..." : "Save profile"}
-            </button>
+            <div className="flex shrink-0 gap-2.5">
+              <button
+                type="button"
+                onClick={() => router.push(`/clients/${clientId}`)}
+                className="h-11 rounded-full border border-input-border bg-white px-5 text-[13px] font-semibold text-text-900 hover:border-text-300"
+              >
+                Done
+              </button>
+              <button type="button" disabled={saving || !dirty} onClick={() => void saveProfile()} className="h-11 rounded-full bg-ink-900 px-6 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-45">
+                {saving ? "Saving..." : "Save profile"}
+              </button>
+            </div>
           </div>
         )}
       </div>

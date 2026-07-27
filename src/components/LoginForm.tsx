@@ -37,11 +37,9 @@ export function LoginForm({ showSignUp }: { showSignUp: boolean }) {
 
   return (
     <AuthShell
-      heading="From census data to a client-ready proposal."
-      description="Manage clients, plan years, and census data, then generate a branded benefits deck in minutes."
-      statusNote="Protected access for your firm's shared workspace."
       cardEyebrow="Welcome back"
       cardTitle="Sign in"
+      cardDescription="Access your firm's workspace."
     >
       <form onSubmit={handleSubmit}>
         <label className="mb-1.5 block text-[13px] font-semibold text-text-900">

@@ -9,6 +9,12 @@ import {
   computeOnboardingSummary,
   formatRecurringDate,
 } from "@/lib/client-onboarding";
+import {
+  BENEFIT_TYPES,
+  policyProgramsFromRecords,
+  policyReadinessIssues,
+} from "@/lib/policy-details";
+import { PILL_TONE_CLASS, type PillTone } from "@/lib/status-pill";
 
 export default async function ClientDetailPage({
   params,
@@ -22,7 +28,15 @@ export default async function ClientDetailPage({
       where: { id },
       include: {
         profile: true,
-        planYears: { orderBy: { effectiveDate: "desc" } },
+        planYears: {
+          orderBy: { effectiveDate: "desc" },
+          include: {
+            _count: { select: { employees: true, decks: true } },
+            benefitPrograms: {
+              include: { plans: { include: { rates: true, aliases: true } } },
+            },
+          },
+        },
         locations: { where: { isHeadquarters: true }, take: 1 },
         _count: {
           select: {
@@ -136,68 +150,111 @@ export default async function ClientDetailPage({
       ) : null}
 
       {!client.archivedAt && (
-        <div className="space-y-9">
+        <div className="grid gap-8 lg:grid-cols-[2fr_1fr] lg:items-start">
           <section>
-            <div className="mb-3.5 flex items-center justify-between gap-4">
-              <h2 className="text-[17px] font-bold text-text-900">Client onboarding</h2>
-              <span className="text-sm font-extrabold text-text-900">{progress.percentage}% complete</span>
+            <div className="mb-3.5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-[17px] font-bold text-text-900">Plan years</h2>
+              <NewPlanYearForm
+                clientId={client.id}
+                currentYear={new Date().getFullYear()}
+              />
             </div>
-            <div className="rounded-[14px] border border-border-light bg-white p-5 shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
-              <div className="h-2 overflow-hidden rounded-full bg-border-lighter">
-                <div className="h-full rounded-full bg-teal-deep" style={{ width: `${progress.percentage}%` }} />
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                {Object.entries(progress.sections).map(([key, section]) => (
-                  <div key={key} className="rounded-[10px] bg-panel-tint px-3 py-3">
-                    <p className="text-xs font-semibold capitalize text-text-900">{sectionLabel(key)}</p>
-                    <p className="mt-1 text-[11px] text-text-400">
-                      {key === "documents"
-                        ? `${progress.documentCount} ${progress.documentCount === 1 ? "document" : "documents"}`
-                        : `${section.completed} of ${section.total} complete`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+
+            {client.planYears.length === 0 ? (
+              <p className="mt-4 text-sm text-text-600">
+                No plan years yet. Create one to enter policy details and upload a census.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {client.planYears.map((planYear) => {
+                  const pills = planYearPills(planYear);
+                  return (
+                    <li key={planYear.id}>
+                      <Link
+                        href={`/clients/${client.id}/plan-years/${planYear.id}`}
+                        className="block rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] hover:border-text-300 sm:p-5"
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-sm font-bold text-text-900">{planYear.label}</span>
+                          <span className="shrink-0 text-right text-[13px] text-text-600">
+                            Effective {formatDate(planYear.effectiveDate)}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {pills.map((pill) => (
+                            <span
+                              key={pill.label}
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${PILL_TONE_CLASS[pill.tone]}`}
+                            >
+                              {pill.label}
+                            </span>
+                          ))}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
-          <section>
-          <div className="mb-3.5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-[17px] font-bold text-text-900">Plan years</h2>
-            <NewPlanYearForm
-              clientId={client.id}
-              currentYear={new Date().getFullYear()}
-            />
-          </div>
-
-          {client.planYears.length === 0 ? (
-            <p className="mt-4 text-sm text-text-600">
-              No plan years yet. Create one to enter policy details and upload a census.
-            </p>
-          ) : (
-            <ul className="max-w-[640px] divide-y divide-border-lighter rounded-[14px] border border-border-light bg-white shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
-              {client.planYears.map((planYear) => (
-                <li key={planYear.id}>
-                  <Link
-                    href={`/clients/${client.id}/plan-years/${planYear.id}`}
-                    className="flex items-center justify-between gap-4 px-4 py-4 hover:bg-panel-tint sm:px-5"
-                  >
-                    <span className="text-sm font-semibold text-text-900">
-                      {planYear.label}
-                    </span>
-                    <span className="shrink-0 text-right text-[13px] text-text-600">
-                      {formatDate(planYear.effectiveDate)}
-                    </span>
-                  </Link>
-                </li>
+          <section className="rounded-[14px] border border-border-light bg-white p-5 shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-[15px] font-bold text-text-900">Onboarding</h2>
+              <span className="text-sm font-extrabold text-text-900">{progress.percentage}%</span>
+            </div>
+            <div className="mt-3 h-[7px] overflow-hidden rounded-full bg-border-lighter">
+              <div className="h-full rounded-full bg-teal-deep" style={{ width: `${progress.percentage}%` }} />
+            </div>
+            <nav className="mt-4 space-y-1" aria-label="Onboarding sections">
+              {Object.entries(progress.sections).map(([key, section]) => (
+                <Link
+                  key={key}
+                  href={`/clients/${client.id}/edit?section=${key}`}
+                  className="flex items-center justify-between gap-3 rounded-[10px] px-3 py-2.5 text-xs hover:bg-panel-tint"
+                >
+                  <span className="font-semibold text-text-900">{sectionLabel(key)}</span>
+                  <span className="text-text-400">
+                    {key === "documents"
+                      ? `${progress.documentCount} ${progress.documentCount === 1 ? "doc" : "docs"}`
+                      : `${section.completed}/${section.total}`}
+                  </span>
+                </Link>
               ))}
-            </ul>
-          )}
+            </nav>
           </section>
         </div>
       )}
     </div>
   );
+}
+
+function planYearPills(planYear: {
+  _count: { employees: number; decks: number };
+  benefitPrograms: Parameters<typeof policyProgramsFromRecords>[0];
+}): Array<{ label: string; tone: PillTone }> {
+  const programs = policyProgramsFromRecords(planYear.benefitPrograms);
+  const offeredCount = programs.filter((program) => program.offered).length;
+  const issues = policyReadinessIssues(programs);
+
+  const census: { label: string; tone: PillTone } =
+    planYear._count.employees > 0
+      ? { label: `Census ${planYear._count.employees} employees`, tone: "success" }
+      : { label: "Census needed", tone: "neutral" };
+
+  const policy: { label: string; tone: PillTone } =
+    offeredCount === 0
+      ? { label: "Policy not started", tone: "neutral" }
+      : issues.length > 0
+        ? { label: `Policy ${issues.length} issue${issues.length === 1 ? "" : "s"}`, tone: "warning" }
+        : { label: `Policy ${offeredCount}/${BENEFIT_TYPES.length}`, tone: "success" };
+
+  const deck: { label: string; tone: PillTone } =
+    planYear._count.decks > 0
+      ? { label: `${planYear._count.decks} deck(s)`, tone: "success" }
+      : { label: "No deck yet", tone: "neutral" };
+
+  return [census, policy, deck];
 }
 
 function jsonStringArray(value: unknown): string[] {

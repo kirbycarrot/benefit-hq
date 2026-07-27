@@ -298,65 +298,56 @@ export function PolicyDetailsEditor({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 rounded-[14px] border border-border-light bg-white p-4 shadow-[0_1px_2px_rgba(20,24,26,0.04)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div>
-          <h3 className="text-sm font-bold text-text-900">Start with what you already know</h3>
-          <p className="mt-1 text-xs text-text-600">
-            Copy the prior renewal or build health plans from the uploaded census, then fill in only the applicable details.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={!canCopyPrior || copying}
-          onClick={() => void copyPriorYear()}
-          className="h-10 shrink-0 rounded-full border border-input-border bg-white px-4 text-xs font-semibold text-text-900 hover:border-teal-deep disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {copying ? "Copying..." : "Copy prior plan year"}
-        </button>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6">
+      <nav
+        aria-label="Benefit types"
+        className="mb-4 flex gap-1.5 overflow-x-auto pb-1 lg:mb-0 lg:flex-col lg:overflow-visible lg:pb-0"
+      >
         {programs.map((program) => {
-          const programIssues = issues.filter(
-            (issue) => issue.benefitType === program.benefitType
-          );
-          const status = programStatus(program, programIssues);
           const active = activeBenefit === program.benefitType;
+          const hasContent =
+            program.benefitType === "VoluntaryOfferings"
+              ? selectedVoluntaryPlanOfferings(program.plans[0]?.details).length > 0
+              : program.plans.length > 0;
+          const dirty = dirtyBenefits.has(program.benefitType);
           return (
             <button
               key={program.benefitType}
               type="button"
               onClick={() => setActiveBenefit(program.benefitType)}
-              className={`rounded-[14px] border p-4 text-left transition-colors ${
+              className={`flex shrink-0 items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-semibold whitespace-nowrap transition-colors lg:w-full ${
                 active
-                  ? "border-teal-deep bg-white shadow-[0_2px_8px_rgba(15,156,144,0.10)]"
-                  : "border-border-light bg-panel-tint hover:border-input-border"
+                  ? "bg-ink-900 text-white"
+                  : "text-text-600 hover:bg-panel-tint hover:text-text-900"
               }`}
             >
-              <span className="block text-sm font-bold text-text-900">
-                {BENEFIT_META[program.benefitType].label}
-              </span>
-              <span className="mt-1 block text-xs text-text-600">
-                {program.benefitType === "VoluntaryOfferings"
-                  ? `${selectedVoluntaryPlanOfferings(program.plans[0]?.details).length} selected`
-                  : `${program.plans.length} ${program.plans.length === 1 ? "plan/class" : "plans/classes"}`}
-              </span>
-              <span className={`mt-3 inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.className}`}>
-                {dirtyBenefits.has(program.benefitType) ? "Unsaved changes" : status.label}
-              </span>
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  dirty
+                    ? "bg-amber"
+                    : hasContent
+                      ? "bg-teal-deep"
+                      : active
+                        ? "border border-white/40"
+                        : "border border-input-border"
+                }`}
+              />
+              {BENEFIT_META[program.benefitType].label}
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      <section className="rounded-[16px] border border-border-light bg-white shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
+      <div className="min-w-0 space-y-4">
+        <ReadinessPanel issues={issues} />
+
+        <section className="rounded-[16px] border border-border-light bg-white shadow-[0_1px_2px_rgba(20,24,26,0.04)]">
         <div className="border-b border-border-lighter p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-3">
                 <h3 className="text-lg font-extrabold text-text-900">
-                  {BENEFIT_META[activeBenefit].label}
+                  {BENEFIT_META[activeBenefit].label} plans
                 </h3>
                 {activeBenefit !== "VoluntaryOfferings" && (
                   <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-text-600">
@@ -381,6 +372,14 @@ export function PolicyDetailsEditor({
             </div>
             {activeBenefit !== "VoluntaryOfferings" && (
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!canCopyPrior || copying}
+                  onClick={() => void copyPriorYear()}
+                  className="h-10 shrink-0 rounded-full border border-input-border bg-white px-4 text-xs font-semibold text-text-900 hover:border-teal-deep disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {copying ? "Copying..." : "Copy from prior year"}
+                </button>
                 {isRateBenefitType(activeBenefit) && addableSuggestions.length > 0 && (
                   <button
                     type="button"
@@ -478,9 +477,8 @@ export function PolicyDetailsEditor({
             </button>
           </div>
         </div>
-      </section>
-
-      <ReadinessPanel issues={issues} />
+        </section>
+      </div>
     </div>
   );
 }
@@ -1190,16 +1188,20 @@ function ReadinessPanel({
 }) {
   if (issues.length === 0) {
     return (
-      <div className="rounded-[14px] border border-green-200 bg-green-50 px-5 py-4">
-        <p className="text-sm font-bold text-success">Policy details are ready for reporting</p>
-        <p className="mt-1 text-xs text-green-800">No plan-level blockers or warnings were found.</p>
+      <div className="rounded-[12px] bg-panel-tint px-4 py-3.5">
+        <p className="text-xs font-semibold text-text-900">
+          Policy details are ready for reporting — no plan-level blockers or warnings were found.
+        </p>
       </div>
     );
   }
   return (
-    <div className="rounded-[14px] border border-border-light bg-white p-5">
-      <h3 className="text-sm font-bold text-text-900">Review before charts and deck</h3>
-      <ul className="mt-3 space-y-2">
+    <div className="rounded-[12px] bg-panel-tint px-4 py-3.5">
+      <p className="text-xs font-semibold text-text-900">
+        {issues.length} item{issues.length === 1 ? "" : "s"} need attention before charts and the
+        deck will reflect this plan year accurately.
+      </p>
+      <ul className="mt-2.5 space-y-2">
         {issues.map((issue, index) => (
           <li key={`${issue.benefitType}-${issue.planName}-${index}`} className="flex gap-2 text-xs text-text-600">
             <span
@@ -1362,28 +1364,6 @@ function changeTierTemplate(plan: EditorPlan, template: TierTemplate): EditorPla
       };
     }),
   };
-}
-
-function programStatus(
-  program: EditorProgram,
-  issues: ReturnType<typeof policyReadinessIssues>
-) {
-  if (program.benefitType === "VoluntaryOfferings") {
-    const count = selectedVoluntaryPlanOfferings(program.plans[0]?.details).length;
-    return count > 0
-      ? { label: "Included", className: "bg-green-50 text-success" }
-      : { label: "None selected", className: "bg-border-lighter text-text-600" };
-  }
-  if (!program.offered) {
-    return { label: "Not offered", className: "bg-border-lighter text-text-600" };
-  }
-  if (issues.some((issue) => issue.severity === "error")) {
-    return { label: "Needs attention", className: "bg-red-50 text-destructive" };
-  }
-  if (issues.some((issue) => issue.severity === "warning")) {
-    return { label: "Review", className: "bg-amber-50 text-amber" };
-  }
-  return { label: "Ready", className: "bg-green-50 text-success" };
 }
 
 function makeClientKey(): string {

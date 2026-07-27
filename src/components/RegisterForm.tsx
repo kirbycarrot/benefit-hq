@@ -52,10 +52,9 @@ export function RegisterForm() {
 
   return (
     <AuthShell
-      heading="Set up your firm's workspace."
-      description="One account per broker — invite teammates once you're in."
       cardEyebrow="Get started"
       cardTitle="Create account"
+      cardDescription="One account per broker — invite teammates once you're in."
     >
       <form onSubmit={handleSubmit}>
         <label className="mb-1.5 block text-[13px] font-semibold text-text-900">Name</label>

@@ -553,6 +553,89 @@ export type PolicyRateInput = z.infer<typeof planRateInputSchema>;
 export type PolicyPlanInput = z.infer<typeof benefitPlanInputSchema>;
 export type PolicyProgramInput = z.infer<typeof benefitProgramInputSchema>;
 
+export function isBenefitType(value: string): value is BenefitType {
+  return BENEFIT_TYPES.includes(value as BenefitType);
+}
+
+function policyPlanDetails(value: unknown): PolicyPlanDetails {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
+      const item = entry[1];
+      return item === null || ["string", "number", "boolean"].includes(typeof item);
+    })
+  );
+}
+
+function customPlanAttributesFromJson(value: unknown): CustomPlanAttribute[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is CustomPlanAttribute =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as { label?: unknown }).label === "string" &&
+      typeof (item as { value?: unknown }).value === "string"
+  );
+}
+
+export type PolicyProgramRecord = {
+  benefitType: string;
+  offered: boolean;
+  plans: Array<{
+    id: string;
+    name: string;
+    carrierName: string | null;
+    subtype: string;
+    offered: boolean;
+    details: unknown;
+    customAttributes: unknown;
+    renewedFromPlanId: string | null;
+    sortOrder: number;
+    aliases: Array<{ alias: string }>;
+    rates: Array<{
+      tier: string;
+      grossPremium: { toNumber(): number };
+      employeeContribution: { toNumber(): number };
+      ratePeriod: string;
+      enrollmentOverride: number | null;
+      sortOrder: number;
+    }>;
+  }>;
+};
+
+/** Maps a Prisma benefitPrograms include (with plans/rates/aliases) into PolicyProgramInput[] for policyReadinessIssues and the policy editor. */
+export function policyProgramsFromRecords(
+  programs: readonly PolicyProgramRecord[]
+): PolicyProgramInput[] {
+  return programs
+    .filter((program) => isBenefitType(program.benefitType))
+    .map((program) => ({
+      benefitType: program.benefitType as BenefitType,
+      offered: program.offered,
+      plans: program.plans.map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        carrierName: plan.carrierName,
+        subtype: plan.subtype,
+        offered: plan.offered,
+        details: policyPlanDetails(plan.details),
+        customAttributes: customPlanAttributesFromJson(plan.customAttributes),
+        detailSchemaVersion: 1,
+        renewedFromPlanId: plan.renewedFromPlanId,
+        sortOrder: plan.sortOrder,
+        aliases: plan.aliases.map((alias) => alias.alias),
+        rates: plan.rates.map((rate) => ({
+          tier: rate.tier as PolicyProgramInput["plans"][number]["rates"][number]["tier"],
+          grossPremium: rate.grossPremium.toNumber(),
+          employeeContribution: rate.employeeContribution.toNumber(),
+          ratePeriod: rate.ratePeriod as PolicyProgramInput["plans"][number]["rates"][number]["ratePeriod"],
+          enrollmentOverride: rate.enrollmentOverride ?? undefined,
+          sortOrder: rate.sortOrder,
+        })),
+      })),
+    }));
+}
+
 export type PolicyReadinessIssue = {
   severity: "error" | "warning";
   benefitType: BenefitType;

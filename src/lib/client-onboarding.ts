@@ -321,10 +321,34 @@ export const newClientIntakeSchema = z
     }
   });
 
+export const quickClientIntakeSchema = z
+  .object({
+    name: z.string().trim().min(1, "Client name is required").max(200),
+    primaryIndustry: z.string().trim().min(1, "Primary industry is required").max(150),
+    primaryRenewalMonth: z.coerce.number().int().min(1).max(12),
+    primaryRenewalDay: z.coerce.number().int().min(1).max(31),
+  })
+  .superRefine((data, context) => {
+    const value = new Date(
+      Date.UTC(2024, data.primaryRenewalMonth - 1, data.primaryRenewalDay)
+    );
+    if (
+      value.getUTCMonth() !== data.primaryRenewalMonth - 1 ||
+      value.getUTCDate() !== data.primaryRenewalDay
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["primaryRenewalDay"],
+        message: "Enter a valid renewal month and day",
+      });
+    }
+  });
+
 export const clientDocumentCategorySchema = z.enum(CLIENT_DOCUMENT_CATEGORIES);
 
 export type ClientOnboardingInput = z.infer<typeof clientOnboardingSchema>;
 export type NewClientIntakeInput = z.infer<typeof newClientIntakeSchema>;
+export type QuickClientIntakeInput = z.infer<typeof quickClientIntakeSchema>;
 
 export type OnboardingSectionKey = "profile" | "team" | "organization" | "goals" | "documents";
 
