@@ -704,6 +704,8 @@ async function importClientRecords(
     // Plan years must exist before documents (planYearId) and before the
     // benefit-plan renewal-chain fixups below.
     const planYearIdByLabel = new Map<string, string>();
+    const planExportIdToNewId = new Map<string, string>();
+    const pendingRenewalLinks: { newPlanId: string; renewedFromExportId: string }[] = [];
     for (const planYear of data.planYears) {
       const created = await tx.planYear.create({
         data: {
@@ -719,9 +721,6 @@ async function importClientRecords(
           data: planYear.policyLines.map((line) => ({ planYearId: created.id, ...line })),
         });
       }
-
-      const planExportIdToNewId = new Map<string, string>();
-      const pendingRenewalLinks: { newPlanId: string; renewedFromExportId: string }[] = [];
 
       for (const program of planYear.benefitPrograms) {
         const createdProgram = await tx.benefitProgram.create({
@@ -762,18 +761,6 @@ async function importClientRecords(
               data: plan.aliases.map((alias) => ({ benefitPlanId: createdPlan.id, ...alias })),
             });
           }
-        }
-      }
-
-      for (const link of pendingRenewalLinks) {
-        const renewedFromPlanId = planExportIdToNewId.get(link.renewedFromExportId);
-        if (renewedFromPlanId) {
-          await tx.benefitPlan.update({
-            where: { id: link.newPlanId },
-            data: { renewedFromPlanId },
-          });
-        } else {
-          warnings.push("A benefit plan's renewal history could not be fully reconstructed.");
         }
       }
 
@@ -859,6 +846,18 @@ async function importClientRecords(
             `Benchmark selection for plan year "${planYear.label}" was skipped: the referenced benchmark dataset is not available here.`
           );
         }
+      }
+    }
+
+    for (const link of pendingRenewalLinks) {
+      const renewedFromPlanId = planExportIdToNewId.get(link.renewedFromExportId);
+      if (renewedFromPlanId) {
+        await tx.benefitPlan.update({
+          where: { id: link.newPlanId },
+          data: { renewedFromPlanId },
+        });
+      } else {
+        warnings.push("A benefit plan's renewal history could not be fully reconstructed.");
       }
     }
 

@@ -30,6 +30,7 @@ type ImportResponse = {
   error?: string;
   id?: string;
   warnings?: string[];
+  issues?: string[];
 };
 
 export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
@@ -43,6 +44,7 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importIssues, setImportIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -62,6 +64,7 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
 
     setImporting(true);
     setImportError(null);
+    setImportIssues([]);
     setWarnings([]);
     setNotice(null);
 
@@ -74,10 +77,15 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
 
       if (!response.ok) {
         setImportError(data?.error ?? "Unable to import this client");
+        setImportIssues(data?.issues?.slice(1) ?? []);
         return;
       }
 
-      setNotice("Client imported successfully.");
+      setNotice(
+        file.name.toLowerCase().endsWith(".xlsx")
+          ? "Client imported successfully from Excel."
+          : "Client backup imported successfully."
+      );
       setWarnings(data?.warnings ?? []);
       router.refresh();
     } catch {
@@ -134,24 +142,30 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
         <div>
           <h2 className="text-[19px] font-extrabold text-text-900">Client management</h2>
           <p className="mt-1 max-w-[760px] text-sm leading-6 text-text-600">
-            Review every client and plan year from one administrative workspace. Permanent deletion removes all related data and stored files.
+            Review every client and plan year, exchange editable client data with the Excel intake workbook, or keep a lossless Benefit HQ backup. Permanent deletion removes all related data and stored files.
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <input
             ref={importInputRef}
             type="file"
-            accept=".benefithq"
+            accept=".benefithq,.xlsx"
             onChange={handleImportFile}
             className="hidden"
           />
+          <Link
+            href="/api/clients/import-template"
+            className="rounded-full border border-input-border bg-white px-5 py-2.5 text-[13px] font-semibold text-text-900 hover:border-text-300"
+          >
+            Download Excel template
+          </Link>
           <button
             type="button"
             disabled={importing}
             onClick={() => importInputRef.current?.click()}
             className="rounded-full bg-ink-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-black disabled:opacity-50"
           >
-            {importing ? "Importing..." : "Import client"}
+            {importing ? "Importing..." : "Import client file"}
           </button>
         </div>
       </div>
@@ -173,11 +187,18 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
       </div>
 
       {importError && (
-        <div role="alert" className="mt-4 flex items-start justify-between gap-4 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-destructive">
-          <span>{importError}</span>
-          <button type="button" onClick={() => setImportError(null)} className="shrink-0 text-xs font-semibold hover:underline">
+        <div role="alert" className="mt-4 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-destructive">
+          <div className="flex items-start justify-between gap-4">
+            <span>{importError}</span>
+            <button type="button" onClick={() => { setImportError(null); setImportIssues([]); }} className="shrink-0 text-xs font-semibold hover:underline">
             Dismiss
-          </button>
+            </button>
+          </div>
+          {importIssues.length > 0 && (
+            <ul className="mt-2 list-inside list-disc space-y-1 text-xs">
+              {importIssues.map((issue, index) => <li key={index}>{issue}</li>)}
+            </ul>
+          )}
         </div>
       )}
 
@@ -226,10 +247,17 @@ export function ClientManagement({ clients }: { clients: ManagedClient[] }) {
                     View client
                   </Link>
                   <a
-                    href={`/api/clients/${client.id}/export`}
+                    href={`/api/clients/${client.id}/export?format=xlsx`}
                     className="rounded-full border border-input-border px-3.5 py-2 text-xs font-semibold text-text-900 hover:border-text-300"
                   >
-                    Export client
+                    Export Excel
+                  </a>
+                  <a
+                    href={`/api/clients/${client.id}/export`}
+                    title="Lossless Benefit HQ backup, including stored documents and internal configuration"
+                    className="rounded-full border border-input-border px-3.5 py-2 text-xs font-semibold text-text-900 hover:border-text-300"
+                  >
+                    Download backup
                   </a>
                   <button type="button" onClick={() => openDeleteDialog({ kind: "client", id: client.id, label: client.name })} className="rounded-full border border-red-200 px-3.5 py-2 text-xs font-semibold text-destructive hover:border-red-400">
                     Delete client
