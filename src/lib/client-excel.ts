@@ -50,6 +50,8 @@ const COLORS = {
   danger: "B42318",
 };
 
+const TABLE_PREVIEW_ROWS = 12;
+
 const PROFILE_FIELDS = [
   field("company", "Display name", "displayName", "required", "The client name shown throughout Benefit HQ."),
   field("company", "Legal company name", "legalName", "required", "Full legal name used for contracts and plan records."),
@@ -580,9 +582,9 @@ function addStartSheet(workbook: ExcelJS.Workbook, populated: boolean) {
   sheet.views = [{ showGridLines: false, zoomScale: 90 }];
   sheet.columns = [
     { width: 4 },
-    { width: 30 },
-    { width: 42 },
-    { width: 42 },
+    { width: 10 },
+    { width: 56 },
+    { width: 52 },
     { width: 4 },
   ];
   sheet.mergeCells("B2:D3");
@@ -598,64 +600,58 @@ function addStartSheet(workbook: ExcelJS.Workbook, populated: boolean) {
   sheet.getRow(3).height = 30;
   sheet.mergeCells("B5:D5");
   sheet.getCell("B5").value =
-    "A polished, structured workbook that can be reviewed by a client and imported directly into Benefit HQ.";
-  sheet.getCell("B5").font = { name: "Aptos", size: 12, color: { argb: COLORS.muted } };
-  sheet.getCell("B5").alignment = { wrapText: true };
-  sheet.getRow(5).height = 34;
+    "A structured workbook your team completes once, then Benefit HQ imports directly. Start with Client Profile, then add only the tabs that apply — contacts, locations, benefit plans, rates, and optional census data.";
+  sheet.getCell("B5").font = { name: "Aptos", size: 11, color: { argb: COLORS.muted } };
+  sheet.getCell("B5").alignment = { wrapText: true, vertical: "middle" };
+  sheet.getRow(5).height = 42;
 
   const steps = [
-    ["1", "Complete the yellow cells", "Start with Client Profile, then add only the tabs that apply. Required columns are marked with an asterisk."],
-    ["2", "Keep reference IDs consistent", "Reuse each Plan Year ID and Plan ID exactly on related tabs. IDs are workbook-only references and do not appear in presentations."],
-    ["3", "Use the provided choices", "Dropdowns and field guidance match the values supported by Benefit HQ. Use semicolons where a cell accepts multiple values."],
-    ["4", "Import from Client Management", "Upload this .xlsx file with Import client file. The import is all-or-nothing and reports the first actionable validation issues."],
+    ["Complete the yellow cells", "Required columns are marked with an asterisk."],
+    ["Keep reference IDs consistent", "Reuse each Plan Year ID and Plan ID exactly on related tabs."],
+    ["Use the provided choices", "Dropdowns match the values Benefit HQ supports. Separate multiple values with semicolons."],
+    ["Import from Client Management", "Upload this .xlsx file. Import is all-or-nothing and reports the first actionable issues."],
   ];
-  let row = 8;
-  for (const [number, title, description] of steps) {
-    sheet.getCell(row, 2).value = number;
-    sheet.getCell(row, 2).style = {
+  let row = 7;
+  for (const [title, description] of steps) {
+    const badgeRow = row;
+    const descriptionRow = row + 1;
+    sheet.getCell(badgeRow, 2).value = (row - 5) / 2;
+    sheet.getCell(badgeRow, 2).style = {
       fill: solid(COLORS.teal),
-      font: { name: "Aptos", size: 14, bold: true, color: { argb: COLORS.white } },
+      font: { name: "Aptos", size: 13, bold: true, color: { argb: COLORS.white } },
       alignment: { horizontal: "center", vertical: "middle" },
     };
-    sheet.getCell(row, 3).value = title;
-    sheet.getCell(row, 3).font = { name: "Aptos", size: 12, bold: true, color: { argb: COLORS.text } };
-    sheet.getCell(row, 4).value = description;
-    sheet.getCell(row, 4).font = { name: "Aptos", size: 10, color: { argb: COLORS.muted } };
-    sheet.getCell(row, 4).alignment = { wrapText: true, vertical: "top" };
-    sheet.getRow(row).height = 50;
+    sheet.mergeCells(badgeRow, 3, badgeRow, 4);
+    sheet.getCell(badgeRow, 3).value = title;
+    sheet.getCell(badgeRow, 3).font = { name: "Aptos", size: 12, bold: true, color: { argb: COLORS.text } };
+    sheet.getCell(badgeRow, 3).alignment = { vertical: "middle" };
+    sheet.getRow(badgeRow).height = 20;
+
+    sheet.mergeCells(descriptionRow, 3, descriptionRow, 4);
+    sheet.getCell(descriptionRow, 3).value = description;
+    sheet.getCell(descriptionRow, 3).font = { name: "Aptos", size: 10, color: { argb: COLORS.muted } };
+    sheet.getCell(descriptionRow, 3).alignment = { wrapText: true, vertical: "top" };
+    sheet.getRow(descriptionRow).height = 28;
     row += 2;
   }
 
-  sheet.mergeCells("B17:D17");
-  sheet.getCell("B17").value = "Workbook map";
-  sectionStyle(sheet.getCell("B17"));
-  const map = [
-    ["Client Profile", "Core company, workforce, and renewal strategy"],
-    ["Contacts / Team / Locations / Entities / Priorities", "Onboarding relationships and organization"],
-    ["Plan Years / Benefit Plans / Rates / Plan Details", "Current and renewal benefits structure"],
-    ["Employees / Dependents / Employee Elections", "Optional census data; no SSN columns are included"],
-  ];
-  map.forEach(([name, description], index) => {
-    const mapRow = 18 + index;
-    sheet.getCell(mapRow, 2).value = name;
-    sheet.getCell(mapRow, 2).font = { name: "Aptos", size: 10, bold: true, color: { argb: COLORS.teal } };
-    sheet.mergeCells(mapRow, 3, mapRow, 4);
-    sheet.getCell(mapRow, 3).value = description;
-    sheet.getCell(mapRow, 3).font = { name: "Aptos", size: 10, color: { argb: COLORS.text } };
-    sheet.getRow(mapRow).height = 24;
-  });
-
-  sheet.mergeCells("B24:D25");
-  sheet.getCell("B24").value =
-    "Privacy note: this workbook can contain personal and benefits information. Store and transmit it only through approved secure channels. The original .benefithq export remains the lossless backup format for attached documents and internal configuration.";
-  sheet.getCell("B24").style = {
-    fill: solid(COLORS.cream),
-    font: { name: "Aptos", size: 10, color: { argb: COLORS.text } },
-    alignment: { wrapText: true, vertical: "middle" },
-    border: boxBorder(COLORS.gold),
+  const privacyRow = row + 1;
+  sheet.mergeCells(privacyRow, 2, privacyRow, 4);
+  sheet.getCell(privacyRow, 2).value = "Privacy";
+  sheet.getCell(privacyRow, 2).style = {
+    font: { name: "Aptos", size: 11, bold: true, color: { argb: COLORS.teal } },
+    border: { bottom: { style: "thin", color: { argb: COLORS.gold } } },
   };
-  sheet.getRow(24).height = 28;
-  sheet.getRow(25).height = 28;
+  sheet.getRow(privacyRow).height = 22;
+
+  const privacyBodyRow = privacyRow + 1;
+  sheet.mergeCells(privacyBodyRow, 2, privacyBodyRow, 4);
+  sheet.getCell(privacyBodyRow, 2).value =
+    "This workbook can contain personal and benefits information. Store and transmit it only through approved secure channels.";
+  sheet.getCell(privacyBodyRow, 2).font = { name: "Aptos", size: 9, italic: true, color: { argb: COLORS.muted } };
+  sheet.getCell(privacyBodyRow, 2).alignment = { wrapText: true, vertical: "top" };
+  sheet.getRow(privacyBodyRow).height = 30;
+
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
 }
 
@@ -746,9 +742,13 @@ function addTableSheet(
   });
   sheet.views = [{ state: "frozen", ySplit: 4, showGridLines: false, zoomScale: 90 }];
   const lastColumn = config.headers.length;
-  for (let row = 5; row <= 304; row += 1) {
+  const lastBandedRow = Math.min(304, 4 + Math.max(TABLE_PREVIEW_ROWS, rows.length));
+  for (let row = 5; row <= lastBandedRow; row += 1) {
+    const fill = solid((row - 5) % 2 === 0 ? COLORS.white : COLORS.panel);
     for (let column = 1; column <= lastColumn; column += 1) {
-      if (row <= Math.max(5, 4 + rows.length)) sheet.getCell(row, column).fill = solid(COLORS.cream);
+      const cell = sheet.getCell(row, column);
+      cell.fill = fill;
+      cell.border = bottomBorder(COLORS.border);
     }
   }
   for (const validation of config.validations ?? []) {
@@ -1175,7 +1175,7 @@ function inputStyle(): Partial<ExcelJS.Style> {
     fill: solid(COLORS.cream),
     font: { name: "Aptos", size: 10, color: { argb: COLORS.text } },
     alignment: { wrapText: true, vertical: "top" },
-    border: boxBorder(COLORS.border),
+    border: bottomBorder(COLORS.border),
   };
 }
 
@@ -1186,6 +1186,10 @@ function solid(argb: string): ExcelJS.Fill {
 function boxBorder(argb: string): Partial<ExcelJS.Borders> {
   const edge = { style: "thin" as const, color: { argb } };
   return { top: edge, left: edge, bottom: edge, right: edge };
+}
+
+function bottomBorder(argb: string): Partial<ExcelJS.Borders> {
+  return { bottom: { style: "thin", color: { argb } } };
 }
 
 function tableName(name: string) {
