@@ -7,10 +7,12 @@ export function ClientDangerZone({
   clientId,
   clientName,
   isArchived,
+  bordered = true,
 }: {
   clientId: string;
   clientName: string;
   isArchived: boolean;
+  bordered?: boolean;
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -67,7 +69,7 @@ export function ClientDangerZone({
   }
 
   return (
-    <div className="mt-8 border-t border-border-lighter pt-6">
+    <div className={bordered ? "mt-8 border-t border-border-lighter pt-6" : ""}>
       <h3 className="text-[13px] font-bold text-text-900">Danger zone</h3>
       <p className="mt-1 max-w-[420px] text-xs leading-5 text-text-600">
         {isArchived

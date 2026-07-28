@@ -189,7 +189,12 @@ export default async function EditClientPage({
 
       {session?.user?.isAdmin && (
         <div className="mt-10 max-w-[760px] rounded-[14px] border border-border-light bg-white p-5 sm:p-7">
-          <ClientDangerZone clientId={client.id} clientName={client.name} isArchived={false} />
+          <ClientDangerZone
+            clientId={client.id}
+            clientName={client.name}
+            isArchived={false}
+            bordered={false}
+          />
         </div>
       )}
     </div>
